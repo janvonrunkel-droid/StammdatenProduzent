@@ -140,11 +140,13 @@ export type Database = {
       }
       documents: {
         Row: {
+          created_by: string | null
           document_date: string | null
           document_number: string | null
           file_path: string
           file_size: number
           id: string
+          original_filename: string | null
           processed_at: string | null
           status: Database["public"]["Enums"]["document_status"]
           supplier_id: string | null
@@ -152,11 +154,13 @@ export type Database = {
           uploaded_at: string
         }
         Insert: {
+          created_by?: string | null
           document_date?: string | null
           document_number?: string | null
           file_path: string
           file_size: number
           id?: string
+          original_filename?: string | null
           processed_at?: string | null
           status?: Database["public"]["Enums"]["document_status"]
           supplier_id?: string | null
@@ -164,11 +168,13 @@ export type Database = {
           uploaded_at?: string
         }
         Update: {
+          created_by?: string | null
           document_date?: string | null
           document_number?: string | null
           file_path?: string
           file_size?: number
           id?: string
+          original_filename?: string | null
           processed_at?: string | null
           status?: Database["public"]["Enums"]["document_status"]
           supplier_id?: string | null
@@ -181,6 +187,13 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
