@@ -1,9 +1,9 @@
 # PROJ-3: Artikel-Stammdaten
 
-**Status:** 🟢 Production Ready (Bug Fixes Applied)
+**Status:** ✅ Deployed (2026-01-30)
 **Erstellt:** 2026-01-29
-**Letztes Update:** 2026-01-29
-**Bug Fix:** BUG-2 UNIQUE-Constraint hinzugefügt (2026-01-29)
+**Letztes Update:** 2026-01-30
+**Production:** Vercel (Auto-Deploy aktiv)
 
 ---
 
