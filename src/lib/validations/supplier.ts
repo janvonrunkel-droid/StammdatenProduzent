@@ -36,7 +36,7 @@ export const updateSupplierSchema = createSupplierSchema.partial()
 export const supplierQuerySchema = z.object({
   search: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(100).default(20), // API limit is 100
   sort: z.enum(['name', '-name']).default('name'),
 })
 

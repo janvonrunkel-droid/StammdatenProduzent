@@ -99,33 +99,15 @@ function ArticlesPageContent() {
     },
   })
 
-  // Fetch suppliers for filter dropdown
-  const { data: suppliersData, error: suppliersError, isLoading: suppliersLoading } = useQuery<{ data: Supplier[] }>({
+  // Fetch suppliers for filter dropdown (API limit is 100)
+  const { data: suppliersData } = useQuery<{ data: Supplier[] }>({
     queryKey: ['suppliers', 'dropdown'],
     queryFn: async () => {
-      console.log('[Suppliers] Starting fetch...')
       const response = await fetch('/api/suppliers?limit=100', { credentials: 'include' })
-      console.log('[Suppliers] Response status:', response.status)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[Suppliers] API error:', response.status, errorText)
-        throw new Error(`Fehler beim Laden der Lieferanten: ${response.status}`)
-      }
-      const data = await response.json()
-      console.log('[Suppliers] Loaded:', data?.data?.length || 0, 'suppliers', data?.data?.map((s: Supplier) => s.name))
-      return data
+      if (!response.ok) throw new Error('Fehler beim Laden der Lieferanten')
+      return response.json()
     },
-    retry: 2,
-    staleTime: 5 * 60 * 1000, // 5 minutes
   })
-
-  // Log supplier loading errors
-  useEffect(() => {
-    if (suppliersError) {
-      console.error('[Suppliers] Query error:', suppliersError)
-      toast.error('Lieferanten konnten nicht geladen werden')
-    }
-  }, [suppliersError])
 
 
   // Build query params for articles
