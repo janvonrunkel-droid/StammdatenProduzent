@@ -516,14 +516,15 @@ function tryMultiplyFormat(line: string): ExtractedPosition | null {
 
 /**
  * Check if a string looks like a valid article name (not just metadata or junk)
+ * Returns false for obvious non-article content, true otherwise (lenient)
  */
 function isValidArticleName(name: string): boolean {
-  if (!name || name.length < 4) return false
+  if (!name || name.length < 3) return false
 
   const lowerName = name.toLowerCase().trim()
 
-  // Reject if it's just a unit/quantity pattern like "0 lfdm.", "Pack", "0 qm"
-  if (/^\d*\s*(lfdm\.?|qm|m²|m³|stk\.?|pack|paket|rolle|stück|kg|meter|cm|mm)\.?$/i.test(name)) {
+  // Reject if it's ONLY a unit/quantity pattern like "0 lfdm.", "Pack", "0 qm", "2 Rolle"
+  if (/^\d*\s*(lfdm\.?|qm|m²|m³|stk\.?|pack|paket|rolle|stück|kg|meter|cm|mm|l|liter)\.?$/i.test(name)) {
     return false
   }
 
@@ -532,20 +533,15 @@ function isValidArticleName(name: string): boolean {
     return false
   }
 
-  // Reject metadata labels
-  if (/^(datum|beleg|lieferschein|rechnung|auftrag|kunde|übertrag)[\s:]/i.test(name)) {
+  // Reject obvious metadata labels that start with these words
+  if (/^(datum|beleg|übertrag|seite|page)[\s:]/i.test(name)) {
     return false
   }
 
-  // Reject if it's mostly numbers and punctuation (like dates "01.12.2025")
-  const alphaCount = (name.match(/[a-zäöüß]/gi) || []).length
-  if (alphaCount < 3) {
-    return false
-  }
-
-  // Reject very short generic words
-  const shortJunkWords = ['pack', 'stk', 'stück', 'rolle', 'sack', 'paket', 'karton', 'bund']
-  if (shortJunkWords.includes(lowerName.replace(/[.\s]/g, ''))) {
+  // Reject single generic unit words
+  const singleJunkWords = ['pack', 'stk', 'stück', 'rolle', 'sack', 'paket', 'karton', 'bund', 'palette', 'meter']
+  const cleanName = lowerName.replace(/[.\s\d]/g, '')
+  if (singleJunkWords.includes(cleanName)) {
     return false
   }
 
@@ -553,12 +549,42 @@ function isValidArticleName(name: string): boolean {
 }
 
 /**
- * Try to match line against simple format: just article + price at end
- * DISABLED: This pattern is too aggressive and matches metadata lines
+ * Try to match line against simple format: article name + single price at end
+ * More restrictive version - requires article name to look like real product
  */
-function trySimpleFormat(_line: string): ExtractedPosition | null {
-  // Disabled - this pattern caused too many false positives
-  // matching lines like "Datum: .2025 1,12" as articles
+function trySimpleFormat(line: string): ExtractedPosition | null {
+  PATTERNS.lineItemSimple.lastIndex = 0
+  const match = PATTERNS.lineItemSimple.exec(line)
+
+  if (match) {
+    const [, articleNum, articleName, priceStr] = match
+
+    const cleanName = articleName.trim()
+
+    // More restrictive checks for simple format
+    if (cleanName.length < 8) return null // Require longer name
+    if (!isValidArticleName(cleanName)) return null
+
+    // Reject if name starts with metadata keywords
+    if (/^(datum|beleg|übertrag|seite|lieferant|kunde|geliefert)/i.test(cleanName)) {
+      return null
+    }
+
+    const totalPrice = parseGermanNumber(priceStr)
+    if (!totalPrice || totalPrice <= 0) return null
+
+    return {
+      line_number: 0,
+      article_name: cleanName,
+      article_number: articleNum || null,
+      quantity: 1,
+      unit: 'Stk',
+      price_per_unit: totalPrice,
+      total_price: totalPrice,
+      confidence: 0.55, // Lower confidence for simple format
+      raw_line: line,
+    }
+  }
   return null
 }
 
@@ -574,6 +600,13 @@ function extractPositionFromLine(line: string, index: number): ExtractedPosition
   }
 
   result = tryMultiplyFormat(line)
+  if (result) {
+    result.line_number = index + 1
+    return result
+  }
+
+  // Try simple format (article + price, lower confidence)
+  result = trySimpleFormat(line)
   if (result) {
     result.line_number = index + 1
     return result
