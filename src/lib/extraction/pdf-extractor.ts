@@ -163,11 +163,13 @@ const PATTERNS = {
   // Price patterns: 1.234,56 € or 1234.56 EUR or 1.234,56
   price: /(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(€|EUR)?/g,
 
-  // Simple price: 25,50 or 25.50
-  simplePrice: /(\d+[.,]\d{2})/g,
+  // Simple price: 25,50 or 25.50 or 1.234,56 (with thousand separator)
+  simplePrice: /(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})/g,
 
-  // Quantity with unit: 100 m² or 5,5 Stk or 10.5 kg
-  quantityUnit: /(\d+[.,]?\d*)\s*(Stk\.?|m²|m³|kg|t|l|Liter|Stück|Palette|Karton|Bund|Rolle|Sack|Paar)/gi,
+  // Quantity with unit - extended for German invoices
+  // Supports: Stk, Stück, LE (Liefereinheit), VE (Verpackungseinheit), PE (Preiseinheit),
+  // Pkg (Packung), Ktn (Karton), m², m³, kg, t, l, Liter, Palette, Bund, Rolle, Sack, Paar, etc.
+  quantityUnit: /(\d+[.,]?\d*)\s*(Stk\.?|Stck\.?|Stück|St\.?|LE|VE|PE|Pkg\.?|Packung|Pck\.?|m²|m2|qm|m³|m3|cbm|kg|KG|g|t|l|L|Liter|ml|Palette|Pal\.?|Karton|Ktn\.?|Krt\.?|Bund|Bd\.?|Rolle|Rll\.?|Sack|Paar|Pr\.?|Fl\.?|Flasche|Dose|Tüte|Set|Box|Einheit|Eh\.?|Meter|Mtr\.?|m(?!\d)|cm|mm)/gi,
 
   // Date patterns: 15.01.2026 or 15/01/2026 or 2026-01-15
   date: /(\d{2}[./-]\d{2}[./-]\d{4}|\d{4}[./-]\d{2}[./-]\d{2})/g,
@@ -178,36 +180,97 @@ const PATTERNS = {
   // Tax rate: 19% MwSt, 7% USt
   taxRate: /(\d{1,2})\s*%\s*(MwSt\.?|USt\.?|Mehrwertsteuer|Umsatzsteuer)/gi,
 
-  // Line item pattern: Position number, article, quantity, price
-  lineItem: /^[\s]*(\d+)[.\s]+(.+?)\s+(\d+[.,]?\d*)\s*(Stk\.?|m²|m³|kg|t|l)?\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})\s*$/gm,
+  // Line item patterns - multiple formats for different invoice styles
+  // Format 1: "1 Artikelname 10 Stk 5,00 50,00" (Position, Name, Qty, Unit, Price, Total)
+  lineItemStandard: /^\s*(\d{1,4})[\s.)\-]+(.{5,80}?)\s+(\d+[.,]?\d*)\s*(Stk\.?|Stck\.?|Stück|St\.?|LE|VE|PE|Pkg\.?|m²|m³|kg|t|l|Palette|Karton|Bund|Rolle|Sack|Paar|Meter|m|cm|mm)?\s+(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s+(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*$/gim,
 
-  // Article number patterns
-  articleNumber: /(?:Art\.?[-\s]?Nr\.?|Artikel[-\s]?Nr\.?|Art\.?|Pos\.?)\s*[:.]?\s*([A-Z0-9-]+)/gi,
+  // Format 2: "Artikelname 10 x 5,00 € = 50,00 €" (Name, Qty, Unit Price, Total)
+  lineItemMultiply: /^(.{5,80}?)\s+(\d+[.,]?\d*)\s*[xX×]\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:€|EUR)?\s*=?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:€|EUR)?\s*$/gm,
+
+  // Format 3: Tabular - just article + prices at end (common in Baumarkt invoices)
+  // "Art.Nr. 123456 Schraube verzinkt M6x30 2,99 €"
+  lineItemSimple: /^(?:.*?(?:Art\.?[-\s]?Nr\.?|Artikel[-\s]?Nr\.?)\s*[:.]?\s*(\d+[-\w]*)\s+)?(.{5,60}?)\s+(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:€|EUR)?\s*$/gm,
+
+  // Article number patterns - extended
+  articleNumber: /(?:Art\.?[-\s]?Nr\.?|Artikel[-\s]?Nr\.?|Art\.?[-\s]?|Pos\.?|Best\.?[-\s]?Nr\.?|EAN|GTIN)\s*[:.]?\s*([A-Z0-9][-A-Z0-9_.]{2,20})/gi,
+
+  // Standalone article number (just a number at start of line)
+  articleNumberNumeric: /^(\d{4,15})\s+/gm,
 }
 
-// Common unit mappings
+// Common unit mappings - extended for German invoices
 const UNIT_MAPPINGS: Record<string, string> = {
+  // Stück variations
   'stk': 'Stk',
   'stk.': 'Stk',
+  'stck': 'Stk',
+  'stck.': 'Stk',
+  'st': 'Stk',
+  'st.': 'Stk',
   'stück': 'Stk',
+  // Liefereinheit / Verpackungseinheit
+  'le': 'LE',
+  've': 'VE',
+  'pe': 'PE',
+  // Packung
+  'pkg': 'Pkg',
+  'pkg.': 'Pkg',
+  'packung': 'Pkg',
+  'pck': 'Pkg',
+  'pck.': 'Pkg',
+  // Flächen
   'm²': 'm²',
   'm2': 'm²',
   'qm': 'm²',
+  // Volumen
   'm³': 'm³',
   'm3': 'm³',
   'cbm': 'm³',
+  // Gewicht
   'kg': 'kg',
+  'g': 'g',
   't': 't',
+  // Flüssigkeiten
   'l': 'l',
   'liter': 'l',
+  'ml': 'ml',
+  // Längen
+  'm': 'm',
+  'meter': 'm',
+  'mtr': 'm',
+  'mtr.': 'm',
+  'cm': 'cm',
+  'mm': 'mm',
+  // Verpackungen
   'palette': 'Palette',
   'pal': 'Palette',
+  'pal.': 'Palette',
   'karton': 'Karton',
   'krt': 'Karton',
+  'krt.': 'Karton',
+  'ktn': 'Karton',
+  'ktn.': 'Karton',
   'bund': 'Bund',
+  'bd': 'Bund',
+  'bd.': 'Bund',
   'rolle': 'Rolle',
+  'rll': 'Rolle',
+  'rll.': 'Rolle',
   'sack': 'Sack',
+  // Sonstiges
   'paar': 'Paar',
+  'pr': 'Paar',
+  'pr.': 'Paar',
+  'fl': 'Flasche',
+  'fl.': 'Flasche',
+  'flasche': 'Flasche',
+  'dose': 'Dose',
+  'tüte': 'Tüte',
+  'set': 'Set',
+  'box': 'Box',
+  'einheit': 'Einheit',
+  'eh': 'Einheit',
+  'eh.': 'Einheit',
 }
 
 /**
@@ -302,22 +365,185 @@ function extractPositionsFromText(text: string): ExtractedPosition[] {
  * Check if line is likely a header or footer (not a position)
  */
 function isHeaderOrFooter(line: string): boolean {
+  const lowerLine = line.toLowerCase().trim()
+
+  // Skip very short lines
+  if (lowerLine.length < 4) return true
+
+  // Table header patterns
   const headerPatterns = [
-    /^(pos\.?|position|artikel|menge|preis|einheit|gesamt|summe|netto|brutto)/i,
-    /^(seite|page|tel\.?|fax|email|www\.|http)/i,
-    /^(ust\.?-?id|steuer|bank|iban|bic|blz)/i,
-    /^(allgemeine geschäftsbedingungen|agb|zahlungsbedingungen)/i,
-    /^[-=_]{5,}$/, // Separator lines
+    // Column headers
+    /^(pos\.?|position|artikel|menge|preis|einheit|gesamt|summe|einzelpreis|gesamtpreis|bezeichnung|beschreibung|e\.?-?preis|g\.?-?preis|ep|gp|vk|ek)\b/i,
+    /\b(pos\.?|menge|einheit|e\.?-?preis|g\.?-?preis|summe)\s+(pos\.?|menge|einheit|e\.?-?preis|g\.?-?preis|summe)/i, // Multiple column headers
+
+    // Page info
+    /^(seite|page)\s*\d/i,
+    /^\d+\s*(von|\/)\s*\d+$/, // "1 von 3" or "1/3"
+
+    // Contact/footer info
+    /^(tel\.?|telefon|fax|email|e-mail|www\.|http|@)/i,
+    /^(ust\.?-?id|steuer-?nr|steuer-?nummer|steuernummer)/i,
+    /^(bank|iban|bic|blz|swift|konto)/i,
+    /^(geschäftsführer|handelsregister|hrb|amtsgericht)/i,
+
+    // Legal/terms
+    /^(allgemeine geschäftsbedingungen|agb|zahlungsbedingungen|lieferbedingungen|zahlbar|fällig)/i,
+    /^(vielen dank|wir danken|mit freundlichen grüßen)/i,
+
+    // Totals section (handled separately)
+    /^(nettobetrag|zwischensumme|subtotal|summe netto|rechnungsbetrag|endbetrag)[\s:]/i,
+    /^(mwst\.?|ust\.?|mehrwertsteuer|umsatzsteuer)\s+\d/i,
+    /^(brutto|gesamt|total|zu zahlen|zahlbetrag)[\s:]/i,
+
+    // Separator lines
+    /^[-=_*]{5,}$/,
+    /^[─═━]{3,}$/,
   ]
 
-  return headerPatterns.some(pattern => pattern.test(line))
+  if (headerPatterns.some(pattern => pattern.test(line))) {
+    return true
+  }
+
+  // Check for pure header line (multiple column-like words)
+  const headerWords = ['pos', 'position', 'artikel', 'artikelnr', 'menge', 'einheit', 'preis', 'einzelpreis', 'gesamtpreis', 'ep', 'gp', 'bezeichnung', 'summe', 'betrag']
+  const wordsInLine = lowerLine.split(/\s+/)
+  const headerWordCount = wordsInLine.filter(w => headerWords.includes(w.replace(/[.:]/g, ''))).length
+
+  // If more than 2 header words in one line, it's likely a table header
+  if (headerWordCount >= 2) {
+    return true
+  }
+
+  return false
 }
 
 /**
- * Extract position data from a single line
+ * Try to match line against standard format: "Pos Artikelname Menge Einheit EP GP"
+ */
+function tryStandardFormat(line: string): ExtractedPosition | null {
+  // Reset regex lastIndex
+  PATTERNS.lineItemStandard.lastIndex = 0
+  const match = PATTERNS.lineItemStandard.exec(line)
+
+  if (match) {
+    const [, posNum, articleName, qtyStr, unitStr, unitPriceStr, totalPriceStr] = match
+
+    const quantity = parseGermanNumber(qtyStr)
+    const unit = normalizeUnit(unitStr)
+    const pricePerUnit = parseGermanNumber(unitPriceStr)
+    const totalPrice = parseGermanNumber(totalPriceStr)
+
+    // Verify calculation
+    let confidence = 0.85
+    if (quantity && pricePerUnit && totalPrice) {
+      const expected = Math.round(quantity * pricePerUnit * 100) / 100
+      if (Math.abs(expected - totalPrice) < 0.5) {
+        confidence = 0.95
+      }
+    }
+
+    return {
+      line_number: parseInt(posNum) || 0,
+      article_name: articleName.trim(),
+      article_number: null,
+      quantity,
+      unit,
+      price_per_unit: pricePerUnit,
+      total_price: totalPrice,
+      confidence,
+      raw_line: line,
+    }
+  }
+  return null
+}
+
+/**
+ * Try to match line against multiply format: "Artikelname 10 x 5,00 € = 50,00 €"
+ */
+function tryMultiplyFormat(line: string): ExtractedPosition | null {
+  PATTERNS.lineItemMultiply.lastIndex = 0
+  const match = PATTERNS.lineItemMultiply.exec(line)
+
+  if (match) {
+    const [, articleName, qtyStr, unitPriceStr, totalPriceStr] = match
+
+    const quantity = parseGermanNumber(qtyStr)
+    const pricePerUnit = parseGermanNumber(unitPriceStr)
+    const totalPrice = parseGermanNumber(totalPriceStr)
+
+    let confidence = 0.85
+    if (quantity && pricePerUnit && totalPrice) {
+      const expected = Math.round(quantity * pricePerUnit * 100) / 100
+      if (Math.abs(expected - totalPrice) < 0.5) {
+        confidence = 0.95
+      }
+    }
+
+    return {
+      line_number: 0,
+      article_name: articleName.trim(),
+      article_number: null,
+      quantity,
+      unit: 'Stk',
+      price_per_unit: pricePerUnit,
+      total_price: totalPrice,
+      confidence,
+      raw_line: line,
+    }
+  }
+  return null
+}
+
+/**
+ * Try to match line against simple format: just article + price at end
+ */
+function trySimpleFormat(line: string): ExtractedPosition | null {
+  PATTERNS.lineItemSimple.lastIndex = 0
+  const match = PATTERNS.lineItemSimple.exec(line)
+
+  if (match) {
+    const [, articleNum, articleName, priceStr] = match
+
+    const cleanName = articleName.trim()
+    // Skip if name is too short or looks like header
+    if (cleanName.length < 4) return null
+
+    const totalPrice = parseGermanNumber(priceStr)
+    if (!totalPrice || totalPrice <= 0) return null
+
+    return {
+      line_number: 0,
+      article_name: cleanName,
+      article_number: articleNum || null,
+      quantity: 1,
+      unit: 'Stk',
+      price_per_unit: totalPrice,
+      total_price: totalPrice,
+      confidence: 0.6,
+      raw_line: line,
+    }
+  }
+  return null
+}
+
+/**
+ * Extract position data from a single line - tries multiple formats
  */
 function extractPositionFromLine(line: string, index: number): ExtractedPosition | null {
-  // Look for price patterns in the line
+  // Try structured formats first (highest confidence)
+  let result = tryStandardFormat(line)
+  if (result) {
+    result.line_number = result.line_number || (index + 1)
+    return result
+  }
+
+  result = tryMultiplyFormat(line)
+  if (result) {
+    result.line_number = index + 1
+    return result
+  }
+
+  // Fallback: generic extraction for lines with prices
   const prices = [...line.matchAll(PATTERNS.simplePrice)]
   if (prices.length === 0) return null
 
@@ -326,6 +552,7 @@ function extractPositionFromLine(line: string, index: number): ExtractedPosition
 
   // Try to find article number
   const articleNumMatch = [...line.matchAll(PATTERNS.articleNumber)][0]
+  const numericArticleMatch = line.match(PATTERNS.articleNumberNumeric)
 
   let quantity: number | null = null
   let unit: string | null = null
@@ -355,41 +582,62 @@ function extractPositionFromLine(line: string, index: number): ExtractedPosition
 
   // Extract article name (everything before the numbers, cleaned up)
   let articleName = line
-    .replace(PATTERNS.simplePrice, '')
-    .replace(PATTERNS.quantityUnit, '')
-    .replace(PATTERNS.articleNumber, '')
-    .replace(/^\d+[.\s]+/, '') // Remove leading position number
+
+  // Remove prices from line
+  for (const priceMatch of prices) {
+    articleName = articleName.replace(priceMatch[0], ' ')
+  }
+
+  // Remove quantity with unit
+  if (quantityMatch) {
+    articleName = articleName.replace(quantityMatch[0], ' ')
+  }
+
+  // Remove article number patterns
+  articleName = articleName
+    .replace(PATTERNS.articleNumber, ' ')
+    .replace(/^\s*\d{1,4}[\s.):\-]+/, '') // Remove leading position number
+    .replace(/^\d{4,15}\s+/, '') // Remove leading article number (numeric)
+    .replace(/[€EUR]+/g, '') // Remove currency symbols
     .replace(/\s+/g, ' ')
     .trim()
 
-  // Skip if article name is too short or just numbers
-  if (!articleName || articleName.length < 3 || /^\d+$/.test(articleName)) {
+  // Skip if article name is too short or just numbers/special chars
+  if (!articleName || articleName.length < 3 || /^[\d\s.,\-€]+$/.test(articleName)) {
     return null
   }
 
   // Calculate confidence based on completeness
   let confidence = 0.5
-  if (articleName.length > 5) confidence += 0.1
+  if (articleName.length > 8) confidence += 0.1
   if (quantity !== null) confidence += 0.1
   if (unit !== null) confidence += 0.05
   if (pricePerUnit !== null) confidence += 0.1
   if (totalPrice !== null) confidence += 0.1
-  if (articleNumMatch) confidence += 0.05
+  if (articleNumMatch || numericArticleMatch) confidence += 0.05
 
   // Verify price calculation if possible
   if (quantity && pricePerUnit && totalPrice) {
     const expectedTotal = Math.round(quantity * pricePerUnit * 100) / 100
-    if (Math.abs(expectedTotal - totalPrice) < 0.1) {
+    if (Math.abs(expectedTotal - totalPrice) < 0.5) {
       confidence += 0.1 // Prices verify correctly
     }
   }
 
   confidence = Math.min(confidence, 1.0)
 
+  // Determine article number
+  let articleNumber: string | null = null
+  if (articleNumMatch) {
+    articleNumber = articleNumMatch[1]
+  } else if (numericArticleMatch) {
+    articleNumber = numericArticleMatch[1]
+  }
+
   return {
     line_number: index + 1,
     article_name: articleName,
-    article_number: articleNumMatch ? articleNumMatch[1] : null,
+    article_number: articleNumber,
     quantity,
     unit,
     price_per_unit: pricePerUnit,
