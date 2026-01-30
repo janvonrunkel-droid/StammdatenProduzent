@@ -83,7 +83,7 @@ function ArticlesPageContent() {
   const { data: unitsData } = useQuery<{ data: Unit[] }>({
     queryKey: ['units'],
     queryFn: async () => {
-      const response = await fetch('/api/units')
+      const response = await fetch('/api/units', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Einheiten')
       return response.json()
     },
@@ -93,7 +93,7 @@ function ArticlesPageContent() {
   const { data: tagsData } = useQuery<{ data: Tag[] }>({
     queryKey: ['tags'],
     queryFn: async () => {
-      const response = await fetch('/api/tags')
+      const response = await fetch('/api/tags', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Tags')
       return response.json()
     },
@@ -103,7 +103,9 @@ function ArticlesPageContent() {
   const { data: suppliersData, isError: suppliersError, error: suppliersErrorDetails } = useQuery<{ data: Supplier[] }>({
     queryKey: ['suppliers'],
     queryFn: async () => {
-      const response = await fetch('/api/suppliers?limit=1000')
+      const response = await fetch('/api/suppliers?limit=1000', {
+        credentials: 'include', // Ensure cookies are sent
+      })
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Suppliers API error:', response.status, errorText)
