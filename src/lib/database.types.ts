@@ -128,21 +128,14 @@ export type Database = {
           table_name?: string
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "audit_log_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       documents: {
         Row: {
           created_by: string | null
           document_date: string | null
           document_number: string | null
+          file_hash: string | null
           file_path: string
           file_size: number
           id: string
@@ -157,6 +150,7 @@ export type Database = {
           created_by?: string | null
           document_date?: string | null
           document_number?: string | null
+          file_hash?: string | null
           file_path: string
           file_size: number
           id?: string
@@ -171,6 +165,7 @@ export type Database = {
           created_by?: string | null
           document_date?: string | null
           document_number?: string | null
+          file_hash?: string | null
           file_path?: string
           file_size?: number
           id?: string
@@ -189,14 +184,34 @@ export type Database = {
             referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "documents_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
+      }
+      duplicate_exclusions: {
+        Row: {
+          entity_a_id: string
+          entity_b_id: string
+          entity_type: string
+          excluded_at: string | null
+          excluded_by: string | null
+          id: string
+        }
+        Insert: {
+          entity_a_id: string
+          entity_b_id: string
+          entity_type: string
+          excluded_at?: string | null
+          excluded_by?: string | null
+          id?: string
+        }
+        Update: {
+          entity_a_id?: string
+          entity_b_id?: string
+          entity_type?: string
+          excluded_at?: string | null
+          excluded_by?: string | null
+          id?: string
+        }
+        Relationships: []
       }
       extractions: {
         Row: {
@@ -347,15 +362,7 @@ export type Database = {
           notes?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "suppliers_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       tags: {
         Row: {
@@ -440,7 +447,48 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      find_document_duplicates: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          doc_a_filename: string
+          doc_a_id: string
+          doc_a_uploaded_at: string
+          doc_b_filename: string
+          doc_b_id: string
+          doc_b_uploaded_at: string
+        }[]
+      }
+      find_similar_articles: {
+        Args: {
+          exclude_id?: string
+          max_results?: number
+          search_query: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          article_number: string
+          id: string
+          name: string
+          similarity: number
+        }[]
+      }
+      find_similar_suppliers: {
+        Args: {
+          exclude_id?: string
+          max_results?: number
+          search_query: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          similarity: number
+        }[]
+      }
+      get_similarity: {
+        Args: { text1: string; text2: string }
+        Returns: number
+      }
     }
     Enums: {
       audit_action: "insert" | "update" | "delete"
@@ -635,6 +683,10 @@ export type UserUpdate = TablesUpdate<"users">
 export type AuditLog = Tables<"audit_log">
 export type AuditLogInsert = TablesInsert<"audit_log">
 export type AuditLogUpdate = TablesUpdate<"audit_log">
+
+export type DuplicateExclusion = Tables<"duplicate_exclusions">
+export type DuplicateExclusionInsert = TablesInsert<"duplicate_exclusions">
+export type DuplicateExclusionUpdate = TablesUpdate<"duplicate_exclusions">
 
 // Enum types
 export type DocumentType = Enums<"document_type">

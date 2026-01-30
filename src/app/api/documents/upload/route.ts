@@ -17,6 +17,14 @@ async function isPdfFile(file: File): Promise<boolean> {
   return PDF_MAGIC_BYTES.every((byte, index) => bytes[index] === byte)
 }
 
+// Calculate SHA-256 hash of file content
+async function calculateFileHash(arrayBuffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  return `sha256:${hashHex}`
+}
+
 // BUG-SEC-5 Fix: Sanitize filename to prevent path traversal and invalid characters
 function sanitizeFilename(filename: string): string {
   // Remove path separators and dangerous characters
@@ -252,6 +260,9 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await file.arrayBuffer()
         const fileBuffer = new Uint8Array(arrayBuffer)
 
+        // Calculate SHA-256 hash for duplicate detection
+        const fileHash = await calculateFileHash(arrayBuffer)
+
         // Upload to Supabase Storage
         const storagePath = `${documentId}.pdf`
         const { error: uploadError } = await supabase.storage
@@ -275,8 +286,10 @@ export async function POST(request: NextRequest) {
         // BUG-SEC-5 Fix: Sanitize the original filename before storing
         const sanitizedFilename = sanitizeFilename(file.name)
 
-        // Create DB entry
-        const { data: document, error: dbError } = await supabase
+        // Create DB entry with file hash for duplicate detection
+        // Note: file_hash column is added via migration, use type assertion
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: document, error: dbError } = await (supabase as any)
           .from('documents')
           .insert({
             id: documentId,
@@ -286,6 +299,7 @@ export async function POST(request: NextRequest) {
             document_number: metadata.document_number,
             file_path: storagePath,  // Store path, not public URL
             file_size: file.size,
+            file_hash: fileHash,  // PROJ-7: Store SHA-256 hash for duplicate detection
             original_filename: sanitizedFilename,
             status: 'pending',
             created_by: user.id,

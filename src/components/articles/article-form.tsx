@@ -66,6 +66,7 @@ interface SimilarArticle {
   id: string
   name: string
   article_number: string | null
+  similarity: number
 }
 
 export function ArticleForm({
@@ -122,26 +123,30 @@ export function ArticleForm({
     }
   }, [open, article, form, units])
 
-  // Debounced similar article check
+  // Debounced similar article check using pg_trgm fuzzy matching
   const checkSimilarArticles = async (name: string) => {
     if (searchTimeout) {
       clearTimeout(searchTimeout)
     }
 
-    if (name.length < 2) {
+    if (name.length < 3) {
       setSimilarArticles([])
       return
     }
 
     const timeout = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/articles/search?q=${encodeURIComponent(name)}`)
+        // Use the new similar API with pg_trgm fuzzy matching
+        const excludeParam = article ? `&exclude_id=${article.id}` : ''
+        const response = await fetch(
+          `/api/articles/similar?q=${encodeURIComponent(name)}&threshold=0.3&limit=5${excludeParam}`
+        )
         const result = await response.json()
-        // Filter out current article if editing
-        const filtered = article
-          ? result.data.filter((d: SimilarArticle) => d.id !== article.id)
-          : result.data
-        setSimilarArticles(filtered)
+        // Filter by similarity threshold (70% for warnings)
+        const highSimilarity = (result.data || []).filter(
+          (d: SimilarArticle) => d.similarity >= 0.7
+        )
+        setSimilarArticles(highSimilarity)
       } catch (error) {
         console.error('Similar article check failed:', error)
       }
@@ -217,16 +222,37 @@ export function ArticleForm({
                   </FormControl>
                   <FormMessage />
                   {similarArticles.length > 0 && (
-                    <Alert variant="default" className="mt-2">
-                      <AlertDescription>
-                        Ähnliche Artikel:{' '}
-                        {similarArticles.map((a, i) => (
-                          <span key={a.id}>
-                            <strong>{a.name}</strong>
-                            {a.article_number && ` (${a.article_number})`}
-                            {i < similarArticles.length - 1 && ', '}
-                          </span>
-                        ))}
+                    <Alert variant="destructive" className="mt-2 border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100 [&>svg]:text-amber-500">
+                      <AlertDescription className="space-y-2">
+                        <p className="font-medium">Ähnliche Artikel gefunden:</p>
+                        <ul className="space-y-1">
+                          {similarArticles.map((a) => (
+                            <li key={a.id} className="flex items-center justify-between text-sm">
+                              <span>
+                                <strong>{a.name}</strong>
+                                {a.article_number && (
+                                  <span className="text-muted-foreground ml-1">
+                                    ({a.article_number})
+                                  </span>
+                                )}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'ml-2 shrink-0',
+                                  a.similarity >= 0.9
+                                    ? 'border-red-500 text-red-700 dark:text-red-400'
+                                    : 'border-amber-500 text-amber-700 dark:text-amber-400'
+                                )}
+                              >
+                                {Math.round(a.similarity * 100)}%
+                              </Badge>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-muted-foreground pt-1">
+                          Trotzdem anlegen? Die Eingabe wird als neuer Artikel gespeichert.
+                        </p>
                       </AlertDescription>
                     </Alert>
                   )}

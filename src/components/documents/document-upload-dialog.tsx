@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, X, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Upload, X, FileText, CheckCircle, AlertCircle, Loader2, AlertTriangle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -39,8 +39,53 @@ interface FileWithProgress {
   file: File
   id: string
   progress: number
-  status: 'pending' | 'uploading' | 'success' | 'error'
+  status: 'pending' | 'uploading' | 'success' | 'error' | 'duplicate'
   error?: string
+  duplicate?: {
+    id: string
+    filename: string
+    uploaded_at: string
+    supplier_name: string | null
+    similarity: number
+  }
+}
+
+// Calculate SHA-256 hash of file content in browser
+async function calculateFileHash(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer()
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  return `sha256:${hashHex}`
+}
+
+// Check for document duplicates before upload
+async function checkDocumentDuplicate(file: File): Promise<{
+  is_duplicate: boolean
+  match?: {
+    id: string
+    filename: string
+    uploaded_at: string
+    supplier_name: string | null
+  }
+  similarity?: number
+} | null> {
+  try {
+    const fileHash = await calculateFileHash(file)
+    const response = await fetch('/api/documents/check-duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: file.name,
+        file_size: file.size,
+        file_hash: fileHash,
+      }),
+    })
+    if (!response.ok) return null
+    return response.json()
+  } catch {
+    return null
+  }
 }
 
 interface DocumentUploadDialogProps {
@@ -88,7 +133,7 @@ export function DocumentUploadDialog({
   }, [])
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[]) => {
       // Validate files
       const totalFiles = [...files.map((f) => f.file), ...acceptedFiles]
       const result = validateFiles(totalFiles)
@@ -101,7 +146,7 @@ export function DocumentUploadDialog({
       // Clear previous errors
       setErrors([])
 
-      // Add new files
+      // Add new files with pending status
       const newFiles: FileWithProgress[] = acceptedFiles.map((file) => ({
         file,
         id: `${file.name}-${Date.now()}-${Math.random()}`,
@@ -110,6 +155,30 @@ export function DocumentUploadDialog({
       }))
 
       setFiles((prev) => [...prev, ...newFiles])
+
+      // Check each file for duplicates asynchronously
+      for (const fileItem of newFiles) {
+        const duplicateResult = await checkDocumentDuplicate(fileItem.file)
+        if (duplicateResult?.is_duplicate && duplicateResult.match) {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === fileItem.id
+                ? {
+                    ...f,
+                    status: 'duplicate',
+                    duplicate: {
+                      id: duplicateResult.match!.id,
+                      filename: duplicateResult.match!.filename,
+                      uploaded_at: duplicateResult.match!.uploaded_at,
+                      supplier_name: duplicateResult.match!.supplier_name,
+                      similarity: duplicateResult.similarity || 1.0,
+                    },
+                  }
+                : f
+            )
+          )
+        }
+      }
     },
     [files]
   )
@@ -252,6 +321,17 @@ export function DocumentUploadDialog({
           </Alert>
         )}
 
+        {/* Duplicate Warning Banner */}
+        {files.some((f) => f.status === 'duplicate') && (
+          <Alert className="border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription>
+              <strong>Mögliche Duplikate gefunden.</strong> Diese Dateien existieren möglicherweise bereits.
+              Sie können sie trotzdem hochladen.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* File List */}
         {hasFiles && (
           <ScrollArea className="max-h-[200px]">
@@ -277,9 +357,21 @@ export function DocumentUploadDialog({
                         {fileItem.error}
                       </p>
                     )}
+                    {fileItem.status === 'duplicate' && fileItem.duplicate && (
+                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 space-y-0.5">
+                        <p className="font-medium">
+                          Duplikat: {Math.round(fileItem.duplicate.similarity * 100)}% Übereinstimmung
+                        </p>
+                        <p className="text-muted-foreground">
+                          &quot;{fileItem.duplicate.filename}&quot; vom{' '}
+                          {new Date(fileItem.duplicate.uploaded_at).toLocaleDateString('de-DE')}
+                          {fileItem.duplicate.supplier_name && ` (${fileItem.duplicate.supplier_name})`}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div className="shrink-0">
-                    {fileItem.status === 'pending' && (
+                  <div className="shrink-0 flex items-center gap-1">
+                    {(fileItem.status === 'pending' || fileItem.status === 'duplicate') && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -292,6 +384,9 @@ export function DocumentUploadDialog({
                       >
                         <X className="h-4 w-4" />
                       </Button>
+                    )}
+                    {fileItem.status === 'duplicate' && (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
                     )}
                     {fileItem.status === 'uploading' && (
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FileText, Package, Users, LogOut, ClipboardCheck } from 'lucide-react'
+import { FileText, Package, Users, LogOut, ClipboardCheck, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -12,6 +12,7 @@ const navigation = [
   { name: 'Review', href: '/review', icon: ClipboardCheck },
   { name: 'Lieferanten', href: '/suppliers', icon: Users },
   { name: 'Artikel', href: '/articles', icon: Package },
+  { name: 'Duplikate', href: '/duplicates', icon: Copy },
 ]
 
 export function AppHeader() {
