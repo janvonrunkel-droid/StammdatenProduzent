@@ -780,6 +780,22 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
   - Handler angepasst: `value === 'all' ? '' : value`
 - **Commit:** `e4b57fa` - fix(PROJ-3): Fix SelectItem empty value causing client-side error
 
+### BUG-5: audit_log FK verweist auf public.users statt auth.users ✅ FIXED
+- **Severity:** Critical
+- **Location:** Datenbank: `audit_log.user_id` Foreign Key
+- **Status:** ✅ **FIXED** (2026-01-30)
+- **Issue:** Artikel anlegen schlägt fehl mit "insert or update on table audit_log violates foreign key constraint audit_log_user_id_fkey"
+- **Root Cause:**
+  - `audit_log.user_id` hatte FK auf `public.users` (leer)
+  - `audit_trigger_function()` verwendet `auth.uid()` (aus `auth.users`)
+  - User existiert in `auth.users` aber nicht in `public.users`
+- **Steps to Reproduce:**
+  1. Versuche einen neuen Artikel anzulegen
+  2. Fehler: "insert or update on table audit_log violates foreign key constraint"
+- **Fix:**
+  - Migration `fix_audit_log_user_id_fk`: FK geändert von `public.users` auf `auth.users`
+- **Migration:** `fix_audit_log_user_id_fk`
+
 ---
 
 ## Security Findings
@@ -832,14 +848,15 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
 |-----------|--------|
 | **AC erfüllt** | 9 von 9 (100%) ✅ |
 | **AC nicht erfüllt** | 0 |
-| **Bugs gefunden** | 4 (1 Critical, 0 High, 0 Medium, 1 Low) |
-| **Bugs gefixt** | 3 (BUG-1 ✅, BUG-2 ✅, BUG-4 ✅) |
+| **Bugs gefunden** | 5 (2 Critical, 0 High, 0 Medium, 1 Low) |
+| **Bugs gefixt** | 4 (BUG-1 ✅, BUG-2 ✅, BUG-4 ✅, BUG-5 ✅) |
 | **Security Warnings** | 0 (alle gefixt) ✅ |
 | **Security OK** | 5 Checks bestanden |
 
 ### Kritische Bugs:
 ~~1. **BUG-2 (High):** UNIQUE-Constraint für Artikelnummer fehlt auf DB-Ebene~~ ✅ FIXED
 ~~2. **BUG-4 (Critical):** SelectItem mit leerem Wert verursacht Client-Side Error~~ ✅ FIXED
+~~3. **BUG-5 (Critical):** audit_log FK verweist auf public.users statt auth.users~~ ✅ FIXED
 
 ### Fehlende Features:
 ~~1. **AC-3:** Detail-Seite `/articles/[id]` nicht implementiert~~ ✅ FIXED
