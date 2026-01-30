@@ -100,9 +100,26 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Define type for document from DB
+  interface DocumentFromDB {
+    id: string
+    type: string
+    supplier_id: string | null
+    document_date: string | null
+    document_number: string | null
+    file_path: string
+    file_size: number
+    status: string
+    uploaded_at: string
+    processed_at: string | null
+    created_by: string | null
+    original_filename: string | null
+    supplier: { id: string; name: string } | null
+  }
+
   // BUG-SEC-2 Fix: Generate signed URLs for each document
   const documentsWithUrls = await Promise.all(
-    (data || []).map(async (doc) => {
+    ((data || []) as DocumentFromDB[]).map(async (doc: DocumentFromDB) => {
       let signedUrl = null
       if (doc.file_path) {
         // Check if it's an old public URL or new path format

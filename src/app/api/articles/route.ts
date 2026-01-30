@@ -71,7 +71,26 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Define type for transformed article
+  // Define types for the query result and transformed article
+  interface ArticleTag {
+    tag: { id: string; name: string; color: string | null } | null
+  }
+
+  interface ArticleFromDB {
+    id: string
+    name: string
+    article_number: string | null
+    unit_id: string
+    description: string | null
+    notes: string | null
+    created_at: string
+    updated_at: string
+    deleted_at: string | null
+    created_by: string | null
+    unit: { id: string; name: string; abbreviation: string | null } | null
+    article_tags: ArticleTag[] | null
+  }
+
   interface TransformedArticle {
     id: string
     name: string
@@ -87,9 +106,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Transform data to flatten tags
-  let articles: TransformedArticle[] = (data || []).map(article => ({
+  let articles: TransformedArticle[] = ((data || []) as ArticleFromDB[]).map((article: ArticleFromDB) => ({
     ...article,
-    tags: (article.article_tags?.map((at: { tag: { id: string; name: string; color: string | null } | null }) => at.tag).filter(Boolean) || []) as Array<{ id: string; name: string; color: string | null }>,
+    tags: (article.article_tags?.map((at: ArticleTag) => at.tag).filter(Boolean) || []) as Array<{ id: string; name: string; color: string | null }>,
     article_tags: undefined,
   }))
 
