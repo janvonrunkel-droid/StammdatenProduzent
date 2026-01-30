@@ -1,8 +1,9 @@
 # PROJ-8: Artikel-Suche & Filter
 
-**Status:** ✅ QA Passed - Ready for Deployment
+**Status:** ✅ Deployed (2026-01-30)
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
+**Production URL:** https://stammdaten-produzent.vercel.app
 
 ---
 
