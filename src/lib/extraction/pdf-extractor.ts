@@ -2,87 +2,30 @@
  * PDF Data Extraction Library
  *
  * Extracts article positions, prices, and supplier information from invoice PDFs.
- * Uses pdf-parse for text extraction and regex patterns for structured data extraction.
+ * Uses unpdf (serverless-optimized pdfjs) for text extraction and regex patterns
+ * for structured data extraction.
  */
 
-// Polyfill DOMMatrix for Node.js environments (Vercel Functions)
-// pdf-parse uses pdfjs-dist which requires DOMMatrix
-if (typeof globalThis.DOMMatrix === 'undefined') {
-  // Simple DOMMatrix polyfill - pdf-parse only needs basic functionality
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).DOMMatrix = class DOMMatrix {
-    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
-    m11 = 1; m12 = 0; m13 = 0; m14 = 0;
-    m21 = 0; m22 = 1; m23 = 0; m24 = 0;
-    m31 = 0; m32 = 0; m33 = 1; m34 = 0;
-    m41 = 0; m42 = 0; m43 = 0; m44 = 1;
-    is2D = true;
-    isIdentity = true;
+import { extractText, getDocumentProxy } from 'unpdf'
 
-    constructor(init?: string | number[]) {
-      if (Array.isArray(init) && init.length === 6) {
-        [this.a, this.b, this.c, this.d, this.e, this.f] = init;
-        this.m11 = this.a; this.m12 = this.b;
-        this.m21 = this.c; this.m22 = this.d;
-        this.m41 = this.e; this.m42 = this.f;
-      }
-    }
+/**
+ * Extract text and page count from a PDF buffer using unpdf
+ * This library is optimized for serverless environments (Vercel, AWS Lambda, etc.)
+ */
+async function extractPdfText(buffer: Buffer): Promise<{ numpages: number; text: string }> {
+  // Convert Buffer to Uint8Array for unpdf
+  const uint8Array = new Uint8Array(buffer)
 
-    multiply() { return new DOMMatrix(); }
-    translate() { return new DOMMatrix(); }
-    scale() { return new DOMMatrix(); }
-    rotate() { return new DOMMatrix(); }
-    inverse() { return new DOMMatrix(); }
-    transformPoint(point: { x: number; y: number }) { return point; }
-  };
-}
+  // Load the PDF document
+  const pdf = await getDocumentProxy(uint8Array)
 
-// Lazy-load pdf-parse to avoid build-time errors (DOMMatrix not defined)
-type PdfParseResult = { numpages: number; text: string }
-type PdfParseFunc = (buffer: Buffer) => Promise<PdfParseResult>
+  // Extract all text, merged into a single string
+  const { totalPages, text } = await extractText(pdf, { mergePages: true })
 
-let pdfParseModule: PdfParseFunc | null = null
-
-async function getPdfParse(): Promise<PdfParseFunc> {
-  if (!pdfParseModule) {
-    // Dynamic import to prevent build-time execution
-    // pdf-parse v2 exports PDFParse class, v1 exports default function
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const module = await import('pdf-parse') as any
-
-    // Try multiple access patterns to handle different versions and bundlers
-    let pdfParse: PdfParseFunc | undefined
-
-    // pdf-parse v2: PDFParse class with getText method
-    if (module.PDFParse) {
-      const PDFParse = module.PDFParse
-      // v2 API: new PDFParse({ data: Buffer }) then .getText()
-      pdfParse = async (buffer: Buffer) => {
-        const parser = new PDFParse({ data: buffer })
-        const textResult = await parser.getText()
-        await parser.destroy() // Clean up resources
-        return { numpages: textResult.total || 1, text: textResult.text || '' }
-      }
-    } else if (typeof module === 'function') {
-      // Direct function export (v1 style)
-      pdfParse = module
-    } else if (typeof module.default === 'function') {
-      // Standard ESM default export (v1 style)
-      pdfParse = module.default
-    } else if (module.default && typeof module.default.default === 'function') {
-      // Double-wrapped default (some bundlers do this with CJS modules)
-      pdfParse = module.default.default
-    }
-
-    if (!pdfParse) {
-      throw new Error(
-        `pdf-parse module could not be loaded. Module structure: ${JSON.stringify(Object.keys(module))}`
-      )
-    }
-
-    pdfParseModule = pdfParse
+  return {
+    numpages: totalPages,
+    text: text as string // text is string when mergePages is true
   }
-  return pdfParseModule
 }
 
 // Types for extracted data
@@ -550,9 +493,8 @@ export async function extractFromPdf(
   pdfBuffer: Buffer
 ): Promise<ExtractionResult | ExtractionErrorResult> {
   try {
-    // Parse PDF (lazy-load pdf-parse to avoid build-time errors)
-    const pdfParse = await getPdfParse()
-    const data = await pdfParse(pdfBuffer)
+    // Parse PDF using unpdf (serverless-optimized)
+    const data = await extractPdfText(pdfBuffer)
 
     // Check if PDF has extractable text
     if (!data.text || data.text.trim().length < 50) {
