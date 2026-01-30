@@ -796,6 +796,23 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
   - Migration `fix_audit_log_user_id_fk`: FK geändert von `public.users` auf `auth.users`
 - **Migration:** `fix_audit_log_user_id_fk`
 
+### BUG-6: DELETE schlägt fehl wegen RLS + audit_log Trigger ✅ FIXED
+- **Severity:** High
+- **Location:** `src/app/api/articles/[id]/route.ts` DELETE-Handler
+- **Status:** ✅ **FIXED** (2026-01-30)
+- **Issue:** Artikel löschen schlägt fehl mit "new row violates row-level security policy for table 'articles'"
+- **Root Cause:**
+  - Der audit_trigger feuert beim UPDATE (soft-delete)
+  - Mit dem User-Client verursacht der Trigger RLS-Probleme
+  - `auth.uid()` funktioniert nicht korrekt im Server-Kontext
+- **Steps to Reproduce:**
+  1. Versuche einen Artikel zu löschen
+  2. Fehler: "new row violates row-level security policy for table 'articles'"
+- **Fix:**
+  - `supabaseAdmin` (Service Role) für DELETE-Operationen verwenden
+  - Umgeht RLS, aber Existenz-Check läuft weiterhin über User-Client
+- **Commit:** `c95ac80` - fix(PROJ-3): BUG-6 Use Service Role client for DELETE
+
 ---
 
 ## Security Findings
@@ -848,8 +865,8 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
 |-----------|--------|
 | **AC erfüllt** | 9 von 9 (100%) ✅ |
 | **AC nicht erfüllt** | 0 |
-| **Bugs gefunden** | 5 (2 Critical, 0 High, 0 Medium, 1 Low) |
-| **Bugs gefixt** | 4 (BUG-1 ✅, BUG-2 ✅, BUG-4 ✅, BUG-5 ✅) |
+| **Bugs gefunden** | 6 (2 Critical, 1 High, 0 Medium, 1 Low) |
+| **Bugs gefixt** | 5 (BUG-1 ✅, BUG-2 ✅, BUG-4 ✅, BUG-5 ✅, BUG-6 ✅) |
 | **Security Warnings** | 0 (alle gefixt) ✅ |
 | **Security OK** | 5 Checks bestanden |
 
@@ -857,6 +874,7 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
 ~~1. **BUG-2 (High):** UNIQUE-Constraint für Artikelnummer fehlt auf DB-Ebene~~ ✅ FIXED
 ~~2. **BUG-4 (Critical):** SelectItem mit leerem Wert verursacht Client-Side Error~~ ✅ FIXED
 ~~3. **BUG-5 (Critical):** audit_log FK verweist auf public.users statt auth.users~~ ✅ FIXED
+~~4. **BUG-6 (High):** DELETE schlägt fehl wegen RLS + audit_log Trigger~~ ✅ FIXED
 
 ### Fehlende Features:
 ~~1. **AC-3:** Detail-Seite `/articles/[id]` nicht implementiert~~ ✅ FIXED
