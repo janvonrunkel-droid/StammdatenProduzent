@@ -6,25 +6,69 @@
  * for structured data extraction.
  */
 
-import { extractText, getDocumentProxy } from 'unpdf'
+import { getDocumentProxy } from 'unpdf'
+import type { PDFDocumentProxy } from 'unpdf/pdfjs'
 
 /**
- * Extract text and page count from a PDF buffer using unpdf
- * This library is optimized for serverless environments (Vercel, AWS Lambda, etc.)
+ * Extract text from a PDF with preserved line structure.
+ * Uses pdfjs getTextContent() API to get text items with positions,
+ * then groups items by Y-position to reconstruct lines.
  */
 async function extractPdfText(buffer: Buffer): Promise<{ numpages: number; text: string }> {
   // Convert Buffer to Uint8Array for unpdf
   const uint8Array = new Uint8Array(buffer)
 
   // Load the PDF document
-  const pdf = await getDocumentProxy(uint8Array)
+  const pdf: PDFDocumentProxy = await getDocumentProxy(uint8Array)
+  const numPages = pdf.numPages
+  const allLines: string[] = []
 
-  // Extract all text, merged into a single string
-  const { totalPages, text } = await extractText(pdf, { mergePages: true })
+  // Process each page
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const textContent = await page.getTextContent()
+
+    // Group text items by their Y position to form lines
+    // Text items with similar Y positions are on the same line
+    const lineMap = new Map<number, { x: number; text: string }[]>()
+    const Y_TOLERANCE = 3 // Items within 3 units are considered same line
+
+    for (const item of textContent.items) {
+      // Skip non-text items
+      if (!('str' in item) || !item.str.trim()) continue
+
+      // Get the Y position (transform[5] is the Y coordinate)
+      const y = Math.round(item.transform[5] / Y_TOLERANCE) * Y_TOLERANCE
+      const x = item.transform[4]
+
+      if (!lineMap.has(y)) {
+        lineMap.set(y, [])
+      }
+      lineMap.get(y)!.push({ x, text: item.str })
+    }
+
+    // Sort lines by Y position (descending, since PDF Y starts at bottom)
+    const sortedYPositions = [...lineMap.keys()].sort((a, b) => b - a)
+
+    // Build lines by sorting items within each line by X position
+    for (const y of sortedYPositions) {
+      const items = lineMap.get(y)!
+      items.sort((a, b) => a.x - b.x)
+      const lineText = items.map(item => item.text).join(' ')
+      if (lineText.trim()) {
+        allLines.push(lineText.trim())
+      }
+    }
+
+    // Add page separator for multi-page PDFs
+    if (pageNum < numPages) {
+      allLines.push('') // Empty line between pages
+    }
+  }
 
   return {
-    numpages: totalPages,
-    text: text as string // text is string when mergePages is true
+    numpages: numPages,
+    text: allLines.join('\n')
   }
 }
 
