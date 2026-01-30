@@ -423,12 +423,12 @@ export default function ArticlesPage() {
         </Popover>
 
         {/* Unit filter */}
-        <Select value={selectedUnitId} onValueChange={(value) => { setSelectedUnitId(value); setPage(1) }}>
+        <Select value={selectedUnitId || 'all'} onValueChange={(value) => { setSelectedUnitId(value === 'all' ? '' : value); setPage(1) }}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Alle Einheiten" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Alle Einheiten</SelectItem>
+            <SelectItem value="all">Alle Einheiten</SelectItem>
             {units.map((unit) => (
               <SelectItem key={unit.id} value={unit.id}>
                 {unit.name}
