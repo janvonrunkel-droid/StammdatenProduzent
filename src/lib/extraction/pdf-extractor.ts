@@ -46,18 +46,27 @@ let pdfParseModule: PdfParseFunc | null = null
 async function getPdfParse(): Promise<PdfParseFunc> {
   if (!pdfParseModule) {
     // Dynamic import to prevent build-time execution
-    // pdf-parse is a CommonJS module - handle ESM/CJS interop carefully
+    // pdf-parse v2 exports PDFParse class, v1 exports default function
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const module = await import('pdf-parse') as any
 
-    // Try multiple access patterns to handle different bundler behaviors
+    // Try multiple access patterns to handle different versions and bundlers
     let pdfParse: PdfParseFunc | undefined
 
-    if (typeof module === 'function') {
-      // Direct function export
+    // pdf-parse v2: PDFParse class with static parse method or constructor
+    if (module.PDFParse) {
+      const PDFParse = module.PDFParse
+      // v2 uses: new PDFParse(buffer) then .parse() or PDFParse.parse(buffer)
+      pdfParse = async (buffer: Buffer) => {
+        const parser = new PDFParse(buffer)
+        const result = await parser.parse()
+        return { numpages: result.pages?.length || 1, text: result.text || '' }
+      }
+    } else if (typeof module === 'function') {
+      // Direct function export (v1 style)
       pdfParse = module
     } else if (typeof module.default === 'function') {
-      // Standard ESM default export
+      // Standard ESM default export (v1 style)
       pdfParse = module.default
     } else if (module.default && typeof module.default.default === 'function') {
       // Double-wrapped default (some bundlers do this with CJS modules)
