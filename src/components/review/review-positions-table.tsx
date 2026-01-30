@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Trash2, Link2, CheckCircle2, AlertCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   Table,
@@ -88,6 +88,57 @@ function parseCurrency(value: string): number | null {
   const normalized = value.replace(/\./g, '').replace(',', '.')
   const parsed = parseFloat(normalized)
   return isNaN(parsed) ? null : parsed
+}
+
+// Currency Input that only formats on blur, allowing free editing
+function CurrencyInput({
+  value,
+  onChange,
+  className,
+  placeholder,
+}: {
+  value: number | null | undefined
+  onChange: (value: number | null) => void
+  className?: string
+  placeholder?: string
+}) {
+  const [localValue, setLocalValue] = useState(formatCurrency(value))
+  const [isFocused, setIsFocused] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Update local value when prop changes (but not while editing)
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(formatCurrency(value))
+    }
+  }, [value, isFocused])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalValue(e.target.value)
+  }
+
+  const handleBlur = () => {
+    setIsFocused(false)
+    const parsed = parseCurrency(localValue)
+    onChange(parsed)
+    setLocalValue(formatCurrency(parsed))
+  }
+
+  const handleFocus = () => {
+    setIsFocused(true)
+  }
+
+  return (
+    <Input
+      ref={inputRef}
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
+      className={className}
+      placeholder={placeholder}
+    />
+  )
 }
 
 // Check if there's a price discrepancy (quantity × price_per_unit ≠ total_price)
@@ -262,9 +313,9 @@ export function ReviewPositionsTable({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Input
-                          value={formatCurrency(position.price_per_unit)}
-                          onChange={(e) => onPositionChange(originalIndex, 'price_per_unit', parseCurrency(e.target.value))}
+                        <CurrencyInput
+                          value={position.price_per_unit}
+                          onChange={(v) => onPositionChange(originalIndex, 'price_per_unit', v)}
                           className="h-8 text-right font-mono"
                           placeholder="0,00"
                         />
@@ -274,9 +325,9 @@ export function ReviewPositionsTable({
                           const discrepancy = checkPriceDiscrepancy(position)
                           return (
                             <div className="space-y-1">
-                              <Input
-                                value={formatCurrency(position.total_price)}
-                                onChange={(e) => onPositionChange(originalIndex, 'total_price', parseCurrency(e.target.value))}
+                              <CurrencyInput
+                                value={position.total_price}
+                                onChange={(v) => onPositionChange(originalIndex, 'total_price', v)}
                                 className={`h-8 text-right font-mono font-medium ${discrepancy.hasDiscrepancy ? 'border-yellow-500' : ''}`}
                                 placeholder="0,00"
                               />
