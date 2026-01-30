@@ -60,6 +60,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          search_vector: unknown
           unit_id: string
           updated_at: string
         }
@@ -72,6 +73,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          search_vector?: unknown
           unit_id: string
           updated_at?: string
         }
@@ -84,6 +86,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          search_vector?: unknown
           unit_id?: string
           updated_at?: string
         }
@@ -325,6 +328,39 @@ export type Database = {
           },
         ]
       }
+      search_profiles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          entity_type: string
+          filters: Json
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          entity_type?: string
+          filters?: Json
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          entity_type?: string
+          filters?: Json
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -447,6 +483,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      autocomplete_articles: {
+        Args: { result_limit?: number; search_query: string }
+        Returns: {
+          article_number: string
+          id: string
+          name: string
+          unit_abbreviation: string
+          unit_name: string
+        }[]
+      }
       find_document_duplicates: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -485,9 +531,35 @@ export type Database = {
           similarity: number
         }[]
       }
+      get_article_ids_by_tags: {
+        Args: { tag_ids: string[] }
+        Returns: {
+          article_id: string
+        }[]
+      }
       get_similarity: {
         Args: { text1: string; text2: string }
         Returns: number
+      }
+      get_tag_counts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          article_count: number
+          tag_color: string
+          tag_id: string
+          tag_name: string
+        }[]
+      }
+      search_articles: {
+        Args: { search_query: string; similarity_threshold?: number }
+        Returns: {
+          article_number: string
+          description: string
+          id: string
+          name: string
+          rank: number
+          search_type: string
+        }[]
       }
     }
     Enums: {
@@ -687,6 +759,10 @@ export type AuditLogUpdate = TablesUpdate<"audit_log">
 export type DuplicateExclusion = Tables<"duplicate_exclusions">
 export type DuplicateExclusionInsert = TablesInsert<"duplicate_exclusions">
 export type DuplicateExclusionUpdate = TablesUpdate<"duplicate_exclusions">
+
+export type SearchProfile = Tables<"search_profiles">
+export type SearchProfileInsert = TablesInsert<"search_profiles">
+export type SearchProfileUpdate = TablesUpdate<"search_profiles">
 
 // Enum types
 export type DocumentType = Enums<"document_type">

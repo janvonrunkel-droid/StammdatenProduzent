@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Tag as TagIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +13,13 @@ interface ArticleCardsProps {
   isLoading: boolean
   onEdit: (article: ArticleWithRelations) => void
   onDelete: (article: ArticleWithRelations) => void
+}
+
+function formatPrice(price: number): string {
+  return price.toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + ' €'
 }
 
 export function ArticleCards({
@@ -31,6 +38,7 @@ export function ArticleCards({
             </CardHeader>
             <CardContent>
               <Skeleton className="h-4 w-24 mb-2" />
+              <Skeleton className="h-4 w-20 mb-2" />
               <div className="flex gap-1">
                 <Skeleton className="h-5 w-16" />
                 <Skeleton className="h-5 w-12" />
@@ -49,7 +57,7 @@ export function ArticleCards({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {articles.map((article) => (
-        <Card key={article.id}>
+        <Card key={article.id} className="flex flex-col">
           <CardHeader className="pb-2">
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
@@ -87,12 +95,50 @@ export function ArticleCards({
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-2">
+          <CardContent className="pt-0 flex-1">
+            <div className="space-y-3">
+              {/* Unit */}
               <div className="flex items-center text-sm text-muted-foreground">
                 <span className="font-medium mr-1">Einheit:</span>
                 {article.unit?.abbreviation || article.unit?.name || '-'}
               </div>
+
+              {/* Price info */}
+              {article.price_stats && article.price_stats.count > 0 && (
+                <div className="rounded-md bg-muted/50 p-2 space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Günstigster Preis:</span>
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      {article.price_stats.cheapest
+                        ? formatPrice(article.price_stats.cheapest.price)
+                        : '-'}
+                    </span>
+                  </div>
+                  {article.price_stats.cheapest && (
+                    <p className="text-xs text-muted-foreground">
+                      bei {article.price_stats.cheapest.supplier_name}
+                    </p>
+                  )}
+                  {article.price_stats.range &&
+                    article.price_stats.range.min !== article.price_stats.range.max && (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Spanne:</span>
+                        <span>
+                          {formatPrice(article.price_stats.range.min)} –{' '}
+                          {formatPrice(article.price_stats.range.max)}
+                        </span>
+                      </div>
+                    )}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Angebote:</span>
+                    <Badge variant="outline" className="h-5 text-xs">
+                      {article.price_stats.count}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
               {article.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {article.tags.slice(0, 4).map((tag) => (
@@ -114,6 +160,14 @@ export function ArticleCards({
                       +{article.tags.length - 4}
                     </Badge>
                   )}
+                </div>
+              )}
+
+              {/* No tags indicator */}
+              {article.tags.length === 0 && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <TagIcon className="h-3 w-3" />
+                  Keine Tags
                 </div>
               )}
             </div>

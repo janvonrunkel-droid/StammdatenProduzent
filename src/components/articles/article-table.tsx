@@ -13,11 +13,33 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import type { Article, Unit, Tag } from '@/lib/database.types'
 
-export interface ArticleWithRelations extends Article {
+// Price statistics for an article
+export interface PriceStats {
+  cheapest?: {
+    price: number
+    supplier_id: string
+    supplier_name: string
+  }
+  range?: {
+    min: number
+    max: number
+  }
+  count: number
+}
+
+// Omit search_vector from Article as it's not returned from the API
+export interface ArticleWithRelations extends Omit<Article, 'search_vector'> {
   unit: Unit | null
   tags: Tag[]
+  price_stats?: PriceStats
 }
 
 type SortField = 'name' | '-name' | 'article_number' | '-article_number' | 'updated_at' | '-updated_at'
@@ -29,6 +51,7 @@ interface ArticleTableProps {
   onSort: (field: SortField) => void
   onEdit: (article: ArticleWithRelations) => void
   onDelete: (article: ArticleWithRelations) => void
+  showPrices?: boolean
 }
 
 function formatDate(dateString: string): string {
@@ -40,6 +63,13 @@ function formatDate(dateString: string): string {
   })
 }
 
+function formatPrice(price: number): string {
+  return price.toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + ' €'
+}
+
 export function ArticleTable({
   articles,
   isLoading,
@@ -47,6 +77,7 @@ export function ArticleTable({
   onSort,
   onEdit,
   onDelete,
+  showPrices = true,
 }: ArticleTableProps) {
   const getSortDirection = (field: string) => {
     const baseField = sortField.startsWith('-') ? sortField.slice(1) : sortField
@@ -73,18 +104,27 @@ export function ArticleTable({
     return null
   }
 
+  // Check if any article has price data
+  const hasPriceData = articles.some(a => a.price_stats && a.price_stats.count > 0)
+
   if (isLoading) {
     return (
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[25%]">Name</TableHead>
-              <TableHead className="w-[15%]">Art.-Nr.</TableHead>
-              <TableHead className="w-[10%]">Einheit</TableHead>
-              <TableHead className="w-[25%]">Tags</TableHead>
+              <TableHead className="w-[22%]">Name</TableHead>
+              <TableHead className="w-[12%]">Art.-Nr.</TableHead>
+              <TableHead className="w-[8%]">Einheit</TableHead>
+              <TableHead className="w-[18%]">Tags</TableHead>
+              {showPrices && (
+                <>
+                  <TableHead className="w-[12%]">Günstigster Preis</TableHead>
+                  <TableHead className="w-[8%]">Angebote</TableHead>
+                </>
+              )}
               <TableHead className="w-[10%]">Aktualisiert</TableHead>
-              <TableHead className="w-[15%] text-right">Aktionen</TableHead>
+              <TableHead className="w-[10%] text-right">Aktionen</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -99,6 +139,12 @@ export function ArticleTable({
                     <Skeleton className="h-5 w-12" />
                   </div>
                 </TableCell>
+                {showPrices && (
+                  <>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                  </>
+                )}
                 <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                 <TableCell className="text-right">
                   <Skeleton className="h-8 w-20 ml-auto" />
@@ -116,117 +162,166 @@ export function ArticleTable({
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[25%]">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8 data-[state=open]:bg-accent"
-                onClick={() => handleSort('name')}
-              >
-                Name
-                {renderSortIcon('name')}
-              </Button>
-            </TableHead>
-            <TableHead className="w-[15%]">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8 data-[state=open]:bg-accent"
-                onClick={() => handleSort('article_number')}
-              >
-                Art.-Nr.
-                {renderSortIcon('article_number')}
-              </Button>
-            </TableHead>
-            <TableHead className="w-[10%]">Einheit</TableHead>
-            <TableHead className="w-[25%]">Tags</TableHead>
-            <TableHead className="w-[10%]">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8 data-[state=open]:bg-accent"
-                onClick={() => handleSort('updated_at')}
-              >
-                Aktualisiert
-                {renderSortIcon('updated_at')}
-              </Button>
-            </TableHead>
-            <TableHead className="w-[15%] text-right">Aktionen</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {articles.map((article) => (
-            <TableRow key={article.id}>
-              <TableCell className="font-medium">
-                <Link
-                  href={`/articles/${article.id}`}
-                  className="hover:underline hover:text-primary transition-colors"
+    <TooltipProvider>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className={showPrices && hasPriceData ? 'w-[22%]' : 'w-[25%]'}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 h-8 data-[state=open]:bg-accent"
+                  onClick={() => handleSort('name')}
                 >
-                  {article.name}
-                </Link>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {article.article_number || '-'}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {article.unit?.abbreviation || article.unit?.name || '-'}
-              </TableCell>
-              <TableCell>
-                <div className="flex flex-wrap gap-1">
-                  {article.tags.length > 0 ? (
-                    article.tags.slice(0, 3).map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        style={{
-                          backgroundColor: tag.color ? `${tag.color}20` : undefined,
-                          color: tag.color || undefined,
-                          borderColor: tag.color || undefined,
-                        }}
-                        className="border"
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                  {article.tags.length > 3 && (
-                    <Badge variant="outline">+{article.tags.length - 3}</Badge>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatDate(article.updated_at)}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onEdit(article)}
-                    aria-label={`${article.name} bearbeiten`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDelete(article)}
-                    aria-label={`${article.name} löschen`}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </TableCell>
+                  Name
+                  {renderSortIcon('name')}
+                </Button>
+              </TableHead>
+              <TableHead className={showPrices && hasPriceData ? 'w-[12%]' : 'w-[15%]'}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 h-8 data-[state=open]:bg-accent"
+                  onClick={() => handleSort('article_number')}
+                >
+                  Art.-Nr.
+                  {renderSortIcon('article_number')}
+                </Button>
+              </TableHead>
+              <TableHead className={showPrices && hasPriceData ? 'w-[8%]' : 'w-[10%]'}>
+                Einheit
+              </TableHead>
+              <TableHead className={showPrices && hasPriceData ? 'w-[18%]' : 'w-[25%]'}>
+                Tags
+              </TableHead>
+              {showPrices && hasPriceData && (
+                <>
+                  <TableHead className="w-[12%]">Günstigster Preis</TableHead>
+                  <TableHead className="w-[8%]">Angebote</TableHead>
+                </>
+              )}
+              <TableHead className="w-[10%]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 h-8 data-[state=open]:bg-accent"
+                  onClick={() => handleSort('updated_at')}
+                >
+                  Aktualisiert
+                  {renderSortIcon('updated_at')}
+                </Button>
+              </TableHead>
+              <TableHead className="w-[10%] text-right">Aktionen</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {articles.map((article) => (
+              <TableRow key={article.id}>
+                <TableCell className="font-medium">
+                  <Link
+                    href={`/articles/${article.id}`}
+                    className="hover:underline hover:text-primary transition-colors"
+                  >
+                    {article.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {article.article_number || '-'}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {article.unit?.abbreviation || article.unit?.name || '-'}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {article.tags.length > 0 ? (
+                      article.tags.slice(0, 3).map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          style={{
+                            backgroundColor: tag.color ? `${tag.color}20` : undefined,
+                            color: tag.color || undefined,
+                            borderColor: tag.color || undefined,
+                          }}
+                          className="border"
+                        >
+                          {tag.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                    {article.tags.length > 3 && (
+                      <Badge variant="outline">+{article.tags.length - 3}</Badge>
+                    )}
+                  </div>
+                </TableCell>
+                {showPrices && hasPriceData && (
+                  <>
+                    <TableCell>
+                      {article.price_stats?.cheapest ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="cursor-help">
+                              <span className="font-medium text-green-600 dark:text-green-400">
+                                {formatPrice(article.price_stats.cheapest.price)}
+                              </span>
+                              {article.price_stats.range &&
+                                article.price_stats.range.min !== article.price_stats.range.max && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    – {formatPrice(article.price_stats.range.max)}
+                                  </span>
+                                )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Günstigster Anbieter: {article.price_stats.cheapest.supplier_name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {article.price_stats && article.price_stats.count > 0 ? (
+                        <Badge variant="outline" className="font-normal">
+                          {article.price_stats.count}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                  </>
+                )}
+                <TableCell className="text-muted-foreground">
+                  {formatDate(article.updated_at)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEdit(article)}
+                      aria-label={`${article.name} bearbeiten`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDelete(article)}
+                      aria-label={`${article.name} löschen`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </TooltipProvider>
   )
 }

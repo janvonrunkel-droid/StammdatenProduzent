@@ -37,9 +37,17 @@ export const articleQuerySchema = z.object({
   search: z.string().optional(),
   tags: z.string().optional(), // comma-separated tag IDs
   unit_id: z.string().uuid().optional(),
+  supplier_id: z.string().uuid().optional(), // Filter by supplier
+  price_min: z.coerce.number().nonnegative().optional(), // Minimum price filter
+  price_max: z.coerce.number().nonnegative().optional(), // Maximum price filter
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-  sort: z.enum(['name', '-name', 'article_number', '-article_number', 'updated_at', '-updated_at']).default('name'),
+  sort: z.enum([
+    'name', '-name',
+    'article_number', '-article_number',
+    'updated_at', '-updated_at',
+    'price_asc', 'price_desc', // Sort by cheapest price
+  ]).default('name'),
 })
 
 // Types derived from schemas
