@@ -51,12 +51,14 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query
 
   if (error) {
-    console.error('Supabase error:', error)
+    console.error('Supabase suppliers error:', error)
     return NextResponse.json(
       { error: 'Datenbankfehler', message: error.message },
       { status: 500 }
     )
   }
+
+  console.log(`Suppliers API: Returning ${data?.length || 0} suppliers (total: ${count})`)
 
   return NextResponse.json({
     data: data || [],

@@ -100,14 +100,26 @@ function ArticlesPageContent() {
   })
 
   // Fetch suppliers
-  const { data: suppliersData } = useQuery<{ data: Supplier[] }>({
+  const { data: suppliersData, isError: suppliersError, error: suppliersErrorDetails } = useQuery<{ data: Supplier[] }>({
     queryKey: ['suppliers'],
     queryFn: async () => {
       const response = await fetch('/api/suppliers?limit=1000')
-      if (!response.ok) throw new Error('Fehler beim Laden der Lieferanten')
-      return response.json()
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Suppliers API error:', response.status, errorText)
+        throw new Error('Fehler beim Laden der Lieferanten')
+      }
+      const data = await response.json()
+      console.log('Suppliers loaded:', data?.data?.length || 0, 'suppliers')
+      return data
     },
+    staleTime: 0, // Always fetch fresh data
   })
+
+  // Log supplier loading issues
+  if (suppliersError) {
+    console.error('Suppliers query error:', suppliersErrorDetails)
+  }
 
   // Build query params for articles
   const articleQueryParams = useMemo(() => {
