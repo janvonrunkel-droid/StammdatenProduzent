@@ -6,7 +6,7 @@
 **Security Fix:** Auth + RLS Policies implementiert (2026-01-30)
 **Bug Fixes:** BUG-6 + BUG-7 gefixt (2026-01-30)
 **Production URL:** https://stammdaten-produzent.vercel.app/suppliers
-**Deployed:** 2026-01-30 (Commit `e3a8479`)
+**Deployed:** 2026-01-30 (Commit `c25bae3`)
 
 ---
 
