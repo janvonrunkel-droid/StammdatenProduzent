@@ -4,27 +4,36 @@ import { createSupplierSchema, supplierQuerySchema } from '@/lib/validations/sup
 
 // GET /api/suppliers - List suppliers with pagination, search, sort
 export async function GET(request: NextRequest) {
+  console.log('[Suppliers API] GET request received')
+
   // Auth check
   const auth = await requireAuth()
   if (auth.response) {
+    console.log('[Suppliers API] Auth failed - returning 401')
     return auth.response
   }
   const { supabase } = auth
+  console.log('[Suppliers API] Auth successful, user:', auth.user?.id)
 
   const searchParams = request.nextUrl.searchParams
-  const queryResult = supplierQuerySchema.safeParse({
+  const rawParams = {
     search: searchParams.get('search') || undefined,
     page: searchParams.get('page') || 1,
     limit: searchParams.get('limit') || 20,
     sort: searchParams.get('sort') || 'name',
-  })
+  }
+  console.log('[Suppliers API] Raw params:', rawParams)
+
+  const queryResult = supplierQuerySchema.safeParse(rawParams)
 
   if (!queryResult.success) {
+    console.log('[Suppliers API] Validation failed:', queryResult.error.flatten())
     return NextResponse.json(
       { error: 'Invalid query parameters', details: queryResult.error.flatten() },
       { status: 400 }
     )
   }
+  console.log('[Suppliers API] Validated params:', queryResult.data)
 
   const { search, page, limit, sort } = queryResult.data
   const offset = (page - 1) * limit
@@ -48,17 +57,18 @@ export async function GET(request: NextRequest) {
   // Apply pagination
   query = query.range(offset, offset + limit - 1)
 
+  console.log('[Suppliers API] Executing Supabase query...')
   const { data, error, count } = await query
 
   if (error) {
-    console.error('Supabase suppliers error:', error)
+    console.error('[Suppliers API] Supabase error:', error)
     return NextResponse.json(
       { error: 'Datenbankfehler', message: error.message },
       { status: 500 }
     )
   }
 
-  console.log(`Suppliers API: Returning ${data?.length || 0} suppliers (total: ${count})`)
+  console.log(`[Suppliers API] Success - returning ${data?.length || 0} suppliers (total: ${count})`)
 
   return NextResponse.json({
     data: data || [],

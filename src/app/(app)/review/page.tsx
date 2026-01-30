@@ -58,7 +58,7 @@ export default function ReviewPage() {
   const { data: suppliersData } = useQuery<SuppliersResponse>({
     queryKey: ['suppliers', 'dropdown'],
     queryFn: async () => {
-      const response = await fetch('/api/suppliers?limit=1000', { credentials: 'include' })
+      const response = await fetch('/api/suppliers?limit=100', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Lieferanten')
       return response.json()
     },
