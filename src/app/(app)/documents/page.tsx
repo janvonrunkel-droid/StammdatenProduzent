@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, FileText, Filter } from 'lucide-react'
+import { Plus, Search, FileText, Filter, Sparkles, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -21,7 +21,10 @@ import {
   DocumentUploadDialog,
   DocumentForm,
   DocumentPdfViewer,
+  ExtractionResultDialog,
   type DocumentWithSupplier,
+  type DocumentExtractionStatus,
+  type ExtractionResult,
 } from '@/components/documents'
 import type { Supplier } from '@/lib/database.types'
 import {
@@ -54,6 +57,20 @@ interface UploadResponse {
   warnings?: { filename: string }[]
 }
 
+interface ExtractResponse {
+  status: string
+  extraction_id: string
+  document_id: string
+  confidence_score: number
+  extraction_method: string
+  positions_count: number
+  supplier_matched: boolean
+  warnings: string[]
+  auto_approved: boolean
+  error?: string
+  message?: string
+}
+
 type SortField = 'uploaded_at' | '-uploaded_at' | 'document_date' | '-document_date'
 
 export default function DocumentsPage() {
@@ -74,8 +91,15 @@ export default function DocumentsPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
+  const [extractionDialogOpen, setExtractionDialogOpen] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<DocumentWithSupplier | null>(null)
   const [dependencyError, setDependencyError] = useState<DependencyError | null>(null)
+
+  // Extraction State
+  const [extractingDocumentId, setExtractingDocumentId] = useState<string | null>(null)
+  const [extractionStatuses, setExtractionStatuses] = useState<DocumentExtractionStatus[]>([])
+  const [currentExtraction, setCurrentExtraction] = useState<ExtractionResult | null>(null)
+  const [isBatchExtracting, setIsBatchExtracting] = useState(false)
 
   // Debounce search
   useEffect(() => {
@@ -129,6 +153,39 @@ export default function DocumentsPage() {
     },
   })
 
+  // Fetch extraction statuses for current documents
+  const fetchExtractionStatuses = useCallback(async (documentIds: string[]) => {
+    const statuses: DocumentExtractionStatus[] = []
+
+    for (const docId of documentIds) {
+      try {
+        const response = await fetch(`/api/documents/${docId}/extraction`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.status !== 'not_started') {
+            statuses.push({
+              documentId: docId,
+              status: data.status,
+              confidenceScore: data.confidence_score,
+            })
+          }
+        }
+      } catch {
+        // Ignore errors for individual documents
+      }
+    }
+
+    setExtractionStatuses(statuses)
+  }, [])
+
+  // Load extraction statuses when documents change
+  useEffect(() => {
+    if (data?.data && data.data.length > 0) {
+      const docIds = data.data.map((d) => d.id)
+      fetchExtractionStatuses(docIds)
+    }
+  }, [data?.data, fetchExtractionStatuses])
+
   // Upload mutation with real progress tracking
   const uploadMutation = useMutation({
     mutationFn: async ({
@@ -147,7 +204,6 @@ export default function DocumentsPage() {
     }) => {
       const formData = new FormData()
       files.forEach((file) => formData.append('files', file))
-      // BUG-3 Fix: Send metadata as JSON string (backend expects JSON)
       formData.append('metadata', JSON.stringify({
         type: metadata.type,
         supplier_id: metadata.supplier_id || null,
@@ -155,7 +211,6 @@ export default function DocumentsPage() {
         document_number: metadata.document_number || null,
       }))
 
-      // Use XMLHttpRequest for real progress tracking (BUG-2 Fix)
       return new Promise<UploadResponse>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
 
@@ -202,7 +257,6 @@ export default function DocumentsPage() {
       const count = data.documents?.length || 1
       toast.success(`${count} Dokument${count > 1 ? 'e' : ''} hochgeladen`)
 
-      // BUG-1 Fix: Show duplicate warnings if any
       if (data.warnings && data.warnings.length > 0) {
         data.warnings.forEach((warning: { filename: string }) => {
           toast.warning(`Ähnliches Dokument bereits vorhanden: ${warning.filename}`)
@@ -211,6 +265,50 @@ export default function DocumentsPage() {
     },
     onError: (error: Error) => {
       toast.error(error.message)
+    },
+  })
+
+  // Extract mutation
+  const extractMutation = useMutation({
+    mutationFn: async (documentId: string): Promise<ExtractResponse> => {
+      const response = await fetch(`/api/documents/${documentId}/extract`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Extraktion fehlgeschlagen')
+      }
+      return data
+    },
+    onSuccess: (data, documentId) => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+
+      // Update extraction status
+      setExtractionStatuses((prev) => {
+        const existing = prev.filter((s) => s.documentId !== documentId)
+        return [
+          ...existing,
+          {
+            documentId,
+            status: data.status as DocumentExtractionStatus['status'],
+            confidenceScore: data.confidence_score,
+          },
+        ]
+      })
+
+      if (data.status === 'rejected') {
+        toast.error(`Extraktion fehlgeschlagen: ${data.message || data.error}`)
+      } else if (data.auto_approved) {
+        toast.success(`Extraktion erfolgreich (${Math.round(data.confidence_score * 100)}% Konfidenz) - automatisch genehmigt`)
+      } else {
+        toast.success(`Extraktion erfolgreich (${Math.round(data.confidence_score * 100)}% Konfidenz) - Review erforderlich`)
+      }
+
+      setExtractingDocumentId(null)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+      setExtractingDocumentId(null)
     },
   })
 
@@ -285,6 +383,76 @@ export default function DocumentsPage() {
     setDeleteOpen(true)
   }
 
+  const handleExtract = async (document: DocumentWithSupplier) => {
+    setExtractingDocumentId(document.id)
+    await extractMutation.mutateAsync(document.id)
+  }
+
+  const handleViewExtraction = async (document: DocumentWithSupplier) => {
+    try {
+      const response = await fetch(`/api/documents/${document.id}/extraction`)
+      if (response.ok) {
+        const extraction = await response.json()
+        setCurrentExtraction(extraction)
+        setSelectedDocument(document)
+        setExtractionDialogOpen(true)
+      } else {
+        toast.error('Extraktions-Daten konnten nicht geladen werden')
+      }
+    } catch {
+      toast.error('Fehler beim Laden der Extraktion')
+    }
+  }
+
+  const handleRetryExtraction = async () => {
+    if (selectedDocument) {
+      setExtractionDialogOpen(false)
+      await handleExtract(selectedDocument)
+    }
+  }
+
+  const handleBatchExtract = async () => {
+    const pendingDocs = documents.filter(
+      (d) => d.status === 'pending' && !extractionStatuses.some((s) => s.documentId === d.id && s.status !== 'not_started')
+    )
+
+    if (pendingDocs.length === 0) {
+      toast.info('Keine ausstehenden Dokumente zum Extrahieren')
+      return
+    }
+
+    setIsBatchExtracting(true)
+    toast.info(`Starte Batch-Extraktion für ${pendingDocs.length} Dokument(e)...`)
+
+    try {
+      const response = await fetch('/api/documents/extract-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document_ids: pendingDocs.map((d) => d.id),
+        }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        queryClient.invalidateQueries({ queryKey: ['documents'] })
+
+        // Refresh extraction statuses
+        const docIds = documents.map((d) => d.id)
+        await fetchExtractionStatuses(docIds)
+
+        toast.success(`${result.processed} Dokument(e) verarbeitet, ${result.successful} erfolgreich`)
+      } else {
+        toast.error(result.error || 'Batch-Extraktion fehlgeschlagen')
+      }
+    } catch {
+      toast.error('Fehler bei der Batch-Extraktion')
+    } finally {
+      setIsBatchExtracting(false)
+    }
+  }
+
   const handleUploadSubmit = async (
     files: File[],
     metadata: {
@@ -330,6 +498,11 @@ export default function DocumentsPage() {
   const hasActiveFilters =
     debouncedSearch || typeFilter !== 'all' || statusFilter !== 'all' || supplierFilter !== 'all'
 
+  // Count pending documents for batch extraction
+  const pendingCount = documents.filter(
+    (d) => d.status === 'pending' && !extractionStatuses.some((s) => s.documentId === d.id && s.status !== 'not_started')
+  ).length
+
   if (error) {
     return (
       <div className="container mx-auto py-8">
@@ -350,10 +523,26 @@ export default function DocumentsPage() {
             PDFs hochladen und verwalten (Rechnungen, Angebote).
           </p>
         </div>
-        <Button onClick={handleUpload}>
-          <Plus className="mr-2 h-4 w-4" />
-          Hochladen
-        </Button>
+        <div className="flex gap-2">
+          {pendingCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleBatchExtract}
+              disabled={isBatchExtracting}
+            >
+              {isBatchExtracting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Alle extrahieren ({pendingCount})
+            </Button>
+          )}
+          <Button onClick={handleUpload}>
+            <Plus className="mr-2 h-4 w-4" />
+            Hochladen
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -484,6 +673,10 @@ export default function DocumentsPage() {
               onView={handleView}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onExtract={handleExtract}
+              onViewExtraction={handleViewExtraction}
+              extractionStatuses={extractionStatuses}
+              extractingDocumentId={extractingDocumentId}
             />
           </div>
           <div className="md:hidden">
@@ -548,6 +741,20 @@ export default function DocumentsPage() {
           if (!open) setSelectedDocument(null)
         }}
         document={selectedDocument}
+      />
+
+      <ExtractionResultDialog
+        open={extractionDialogOpen}
+        onOpenChange={(open) => {
+          setExtractionDialogOpen(open)
+          if (!open) {
+            setCurrentExtraction(null)
+            setSelectedDocument(null)
+          }
+        }}
+        extraction={currentExtraction}
+        onRetry={handleRetryExtraction}
+        isRetrying={extractMutation.isPending}
       />
     </div>
   )
