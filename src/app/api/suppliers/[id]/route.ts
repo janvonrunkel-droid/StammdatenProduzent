@@ -64,7 +64,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase } = auth
+  // BUG-6 Fix: Use supabaseAdmin to bypass RLS for audit_log trigger
+  // The audit_trigger_function runs as postgres (SECURITY DEFINER) but
+  // audit_log RLS policies only allow 'authenticated' or 'service_role'.
+  // Using service_role client ensures the trigger can write to audit_log.
+  const { supabaseAdmin: supabase, user } = auth
 
   const { id } = await params
 
@@ -89,10 +93,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const input = validationResult.data
 
-  // Check if supplier exists
+  // Check if supplier exists and get ownership info (manual check since we bypass RLS)
   const { data: existing, error: fetchError } = await supabase
     .from('suppliers')
-    .select('id, name')
+    .select('id, name, created_by')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -101,6 +105,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json(
       { error: 'Lieferant nicht gefunden' },
       { status: 404 }
+    )
+  }
+
+  // Manual ownership check: user can only update their own suppliers or legacy ones (created_by = null)
+  if (existing.created_by && existing.created_by !== user.id) {
+    return NextResponse.json(
+      { error: 'Nicht autorisiert', message: 'Sie koennen nur eigene Lieferanten bearbeiten.' },
+      { status: 403 }
     )
   }
 

@@ -135,6 +135,20 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error('Supabase error:', error)
+
+    // BUG-7 Fix: Handle duplicate name constraint violation with user-friendly message
+    // PostgreSQL error code 23505 = unique_violation
+    if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+      return NextResponse.json(
+        {
+          error: 'ValidationError',
+          message: 'Lieferant mit diesem Namen existiert bereits',
+          field: 'name',
+        },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
       { error: 'Datenbankfehler', message: error.message },
       { status: 500 }
