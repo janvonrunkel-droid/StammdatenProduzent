@@ -1,8 +1,9 @@
 # PROJ-4: PDF-Upload & Storage
 
-**Status:** ✅ Security Fixes Applied - Ready for Testing
+**Status:** ✅ Deployed (2026-01-30)
+**Production URL:** https://stammdaten-produzent.vercel.app
 **Erstellt:** 2026-01-29
-**Letztes Update:** 2026-01-29
+**Letztes Update:** 2026-01-30
 
 ---
 
