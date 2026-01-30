@@ -766,6 +766,20 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
 - **Actual:** Kann weniger als 20 zurückgeben wenn Tags gefiltert werden
 - **Priority:** Low (UX Issue)
 
+### BUG-4: SelectItem mit leerem Wert verursacht Client-Side Error ✅ FIXED
+- **Severity:** Critical
+- **Location:** `src/app/(app)/articles/page.tsx:431`
+- **Status:** ✅ **FIXED** (2026-01-30)
+- **Issue:** `<SelectItem value="">` verursacht Client-Side Exception in Production
+- **Root Cause:** Radix UI Select unterstützt keine leeren Strings als SelectItem values
+- **Steps to Reproduce:**
+  1. Öffne `/articles` in Production
+  2. App stürzt ab mit "Application error: a client-side exception has occurred"
+- **Fix:**
+  - Geändert `value=""` zu `value="all"`
+  - Handler angepasst: `value === 'all' ? '' : value`
+- **Commit:** `e4b57fa` - fix(PROJ-3): Fix SelectItem empty value causing client-side error
+
 ---
 
 ## Security Findings
@@ -818,13 +832,14 @@ Diese Patterns werden für Artikel übernommen und erweitert um:
 |-----------|--------|
 | **AC erfüllt** | 9 von 9 (100%) ✅ |
 | **AC nicht erfüllt** | 0 |
-| **Bugs gefunden** | 3 (0 High, 0 Medium, 1 Low) |
-| **Bugs gefixt** | 2 (BUG-1 ✅, BUG-2 ✅) |
+| **Bugs gefunden** | 4 (1 Critical, 0 High, 0 Medium, 1 Low) |
+| **Bugs gefixt** | 3 (BUG-1 ✅, BUG-2 ✅, BUG-4 ✅) |
 | **Security Warnings** | 0 (alle gefixt) ✅ |
 | **Security OK** | 5 Checks bestanden |
 
 ### Kritische Bugs:
 ~~1. **BUG-2 (High):** UNIQUE-Constraint für Artikelnummer fehlt auf DB-Ebene~~ ✅ FIXED
+~~2. **BUG-4 (Critical):** SelectItem mit leerem Wert verursacht Client-Side Error~~ ✅ FIXED
 
 ### Fehlende Features:
 ~~1. **AC-3:** Detail-Seite `/articles/[id]` nicht implementiert~~ ✅ FIXED
