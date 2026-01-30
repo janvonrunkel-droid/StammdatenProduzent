@@ -6,31 +6,108 @@
  * for structured data extraction.
  */
 
-import { extractText, getDocumentProxy } from 'unpdf'
+import { getDocumentProxy } from 'unpdf'
+
+// Type for text content item from pdfjs
+interface TextItem {
+  str: string
+  transform?: number[]
+  width?: number
+  height?: number
+}
 
 /**
  * Extract text from a PDF with preserved line structure.
- * Uses unpdf's extractText with mergePages:false to get per-page text,
- * then joins pages with double newlines to preserve structure.
+ * Uses pdfjs getTextContent() API to get text items, then reconstructs
+ * lines based on Y-position grouping for proper structure.
  */
 async function extractPdfText(buffer: Buffer): Promise<{ numpages: number; text: string }> {
   // Convert Buffer to Uint8Array for unpdf
   const uint8Array = new Uint8Array(buffer)
 
   // Load the PDF document
-  const pdf = await getDocumentProxy(uint8Array)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdf = await getDocumentProxy(uint8Array) as any
+  const numPages = pdf.numPages || 1
+  const allLines: string[] = []
 
-  // Extract text per page (mergePages: false returns string[])
-  const { totalPages, text } = await extractText(pdf, { mergePages: false })
-  const pageTexts = text as string[]
+  // Process each page
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    try {
+      const page = await pdf.getPage(pageNum)
+      const textContent = await page.getTextContent()
 
-  // Join pages with double newline to preserve page boundaries
-  // Each page's text should already have some line structure
-  const fullText = pageTexts.join('\n\n')
+      if (!textContent?.items?.length) {
+        continue
+      }
+
+      // Group text items by their Y position to form lines
+      const lineMap = new Map<number, { x: number; text: string }[]>()
+      const Y_TOLERANCE = 5 // Items within 5 units are considered same line
+
+      for (const item of textContent.items) {
+        // Cast to our TextItem type
+        const textItem = item as TextItem
+
+        // Skip non-text items or empty strings
+        if (!textItem.str || !textItem.str.trim()) continue
+
+        // Get position - try transform array first, fallback to 0
+        let x = 0
+        let y = 0
+
+        if (textItem.transform && Array.isArray(textItem.transform) && textItem.transform.length >= 6) {
+          x = textItem.transform[4] || 0
+          y = textItem.transform[5] || 0
+        }
+
+        // Round Y to group items on same line
+        const yKey = Math.round(y / Y_TOLERANCE) * Y_TOLERANCE
+
+        if (!lineMap.has(yKey)) {
+          lineMap.set(yKey, [])
+        }
+        lineMap.get(yKey)!.push({ x, text: textItem.str })
+      }
+
+      // If no items have transform data, just concatenate all text
+      if (lineMap.size === 0) {
+        const fallbackText = textContent.items
+          .filter((item: TextItem) => item.str && item.str.trim())
+          .map((item: TextItem) => item.str)
+          .join(' ')
+        if (fallbackText.trim()) {
+          allLines.push(fallbackText.trim())
+        }
+        continue
+      }
+
+      // Sort lines by Y position (descending, PDF Y starts at bottom)
+      const sortedYPositions = [...lineMap.keys()].sort((a, b) => b - a)
+
+      // Build lines by sorting items within each line by X position
+      for (const yKey of sortedYPositions) {
+        const items = lineMap.get(yKey)!
+        items.sort((a, b) => a.x - b.x)
+        const lineText = items.map(item => item.text).join(' ')
+        if (lineText.trim()) {
+          allLines.push(lineText.trim())
+        }
+      }
+    } catch (pageError) {
+      console.error(`Error processing page ${pageNum}:`, pageError)
+      // Continue with next page
+    }
+
+    // Add empty line between pages for multi-page PDFs
+    if (pageNum < numPages) {
+      allLines.push('')
+    }
+  }
 
   return {
-    numpages: totalPages,
-    text: fullText
+    numpages: numPages,
+    text: allLines.join('\n')
   }
 }
 
