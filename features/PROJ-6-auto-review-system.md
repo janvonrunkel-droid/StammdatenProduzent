@@ -1,8 +1,9 @@
 # PROJ-6: Auto-Review System
 
-**Status:** ✅ Done (Production Ready)
+**Status:** ✅ Deployed (2026-01-30)
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
+**Production URL:** https://stammdaten-produzent.vercel.app/review
 
 ---
 
