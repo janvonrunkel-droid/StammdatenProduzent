@@ -1,6 +1,6 @@
 # PROJ-2: Lieferanten-Verwaltung
 
-**Status:** 🟠 Production Bug - DELETE funktioniert nicht
+**Status:** ✅ Production Ready
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
 **Security Fix:** Auth + RLS Policies implementiert (2026-01-30)
@@ -784,14 +784,15 @@ src/
 | **Acceptance Criteria** | 7 | 0 | 7 ✅ |
 | **Edge Cases** | 5 | 2* | 7 |
 | **Security** | 6 | 0 | 6 ✅ |
-| **Bugs gefunden** | - | 4 | 4 |
-| **Bugs gefixt** | 2 | 2 | 4 |
+| **Bugs gefunden** | - | 5 | 5 |
+| **Bugs gefixt** | 3 | 2 | 5 |
 
 *EC-3 (Zeichen-Counter) und EC-7 (Virtualized List) sind "nice-to-have"
 
 ### Bug Status
 - ~~**CRITICAL:** BUG-1 (Keine Auth)~~ ✅ FIXED
 - ~~**HIGH:** BUG-2 (RLS Policies)~~ ✅ FIXED
+- ~~**HIGH:** BUG-5 (audit_log RLS bei DELETE)~~ ✅ FIXED
 - **LOW:** BUG-3 (Zeichen-Counter) - offen
 - **LOW:** BUG-4 (Detail-Seite) - offen
 
@@ -841,6 +842,11 @@ Alle kritischen Security-Issues wurden behoben:
 
 3. **created_by Tracking:** User-ID wird beim INSERT automatisch gesetzt
 
+4. **BUG-5 Fix:** DELETE Endpoint verwendet `supabaseAdmin` (service_role)
+   - [[id]/route.ts:162-191](src/app/api/suppliers/[id]/route.ts#L162-L191)
+   - Manual ownership check da RLS bypassed wird
+   - Löst audit_log RLS Trigger-Problem
+
 ---
 
 ## Deployment Log (2026-01-30)
@@ -863,68 +869,29 @@ Alle kritischen Security-Issues wurden behoben:
 
 ## 🚨 Production Bug (2026-01-30)
 
-### BUG-5: audit_log RLS Policy blockiert Operationen
+### BUG-5: audit_log RLS Policy blockiert Operationen ✅ FIXED
 
 - **Severity:** HIGH
-- **Status:** 🔴 OFFEN - Muss vom Backend Developer gefixt werden
+- **Status:** ✅ **FIXED** (2026-01-30)
 - **Discovered:** 2026-01-30 nach Deployment
 - **Error:** `new row violates row-level security policy for table "audit_log"`
 
-**Symptome:**
-| Operation | Status |
-|-----------|--------|
-| Anlegen | ✅ Funktioniert |
-| Bearbeiten | ✅ Funktioniert |
-| Löschen | ❌ RLS Error |
+**Root Cause:**
+- `audit_trigger_function()` hat `SECURITY DEFINER` und läuft als `postgres` Role
+- Die `audit_log` RLS INSERT Policy erlaubt nur `authenticated` Role (nicht `postgres`)
+- Der DELETE Endpoint nutzte den normalen `supabase` Client (anon key)
+- Wenn der Trigger feuert, läuft er im `postgres` Kontext und kann nicht in `audit_log` schreiben
 
-**Root Cause Analyse:**
-- `audit_log` Tabelle hat RLS aktiviert
-- Es existiert ein Trigger `audit_suppliers` der bei INSERT/UPDATE/DELETE feuert
-- Trigger-Funktion `audit_trigger_function()` schreibt in `audit_log`
-- Bei DELETE-Operationen schlägt der INSERT in `audit_log` fehl
+**Fix Applied:**
+- **File:** [src/app/api/suppliers/[id]/route.ts](src/app/api/suppliers/[id]/route.ts) (Zeile 162-191)
+- Changed from `const { supabase } = auth` to `const { supabaseAdmin: supabase, user } = auth`
+- Added manual ownership check since `supabaseAdmin` bypasses RLS:
+  - Fetches `created_by` field from supplier
+  - Verifies user owns the supplier (or it's legacy data with `created_by = null`)
+  - Returns 403 Forbidden if unauthorized
 
-**Versuchte Fixes (DevOps - nicht erfolgreich):**
-
-1. **Migration `fix_audit_log_rls_policy`:**
-   ```sql
-   CREATE POLICY "Authenticated users can insert audit_log"
-   ON public.audit_log FOR INSERT TO authenticated WITH CHECK (true);
-
-   CREATE POLICY "Service role can manage audit_log"
-   ON public.audit_log FOR ALL TO service_role USING (true) WITH CHECK (true);
-   ```
-   → Ergebnis: Anlegen + Bearbeiten funktioniert, Löschen nicht
-
-2. **Migration `fix_audit_trigger_security_definer`:**
-   ```sql
-   CREATE OR REPLACE FUNCTION audit_trigger_function()
-   RETURNS TRIGGER LANGUAGE plpgsql
-   SECURITY DEFINER SET search_path = public AS $$...$$;
-   ```
-   → Ergebnis: Löschen funktioniert immer noch nicht
-
-**Für Backend Developer zu prüfen:**
-- Wie wird DELETE in der API ausgeführt? (Soft-Delete via UPDATE oder separater Mechanismus?)
-- Wird der richtige Supabase Client verwendet? (anon key vs service_role key)
-- RLS Context bei DELETE-Trigger Operations
-- Warum funktioniert INSERT/UPDATE aber DELETE nicht?
-
-**Betroffene Dateien:**
-- [src/app/api/suppliers/[id]/route.ts](src/app/api/suppliers/[id]/route.ts) - DELETE endpoint (Zeile 156-220)
-- Supabase: `audit_log` Tabelle
-- Supabase: `audit_trigger_function()` Funktion
-- Supabase: `audit_suppliers` Trigger auf `suppliers` Tabelle
-
-**Aktuelle RLS Policies auf audit_log:**
-- `Authenticated users can view audit_log` (SELECT)
-- `Authenticated users can insert audit_log` (INSERT) - hinzugefügt
-- `Service role can manage audit_log` (ALL) - hinzugefügt
-
-**Trigger Details:**
-```sql
--- Trigger feuert bei INSERT, UPDATE, DELETE auf suppliers
-audit_suppliers → EXECUTE FUNCTION audit_trigger_function()
-
--- Funktion (jetzt SECURITY DEFINER):
-audit_trigger_function() → INSERT INTO audit_log (...)
-```
+**Why This Works:**
+- `supabaseAdmin` uses the `service_role` key which bypasses RLS entirely
+- The `audit_log` table has a policy "Service role can manage audit_log"
+- Authentication is still verified via `requireAuth()` before using admin client
+- Manual ownership check preserves the security model
