@@ -121,14 +121,14 @@ export function ReviewMetadataForm({
           </div>
           <div className="flex gap-2">
             <Select
-              value={supplierId || ''}
-              onValueChange={(v) => onSupplierChange(v || null)}
+              value={supplierId || '__none__'}
+              onValueChange={(v) => onSupplierChange(v === '__none__' ? null : v)}
             >
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder={supplierDetected ? `${supplierDetected} (nicht zugeordnet)` : 'Lieferant wählen...'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">
+                <SelectItem value="__none__">
                   <span className="text-muted-foreground">Nicht zugeordnet</span>
                 </SelectItem>
                 {suppliers.map((supplier) => (
