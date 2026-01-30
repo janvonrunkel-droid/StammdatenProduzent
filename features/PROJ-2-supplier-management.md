@@ -1,6 +1,6 @@
 # PROJ-2: Lieferanten-Verwaltung
 
-**Status:** ✅ Production Ready
+**Status:** 🔴 Production Bug (BUG-6 offen)
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
 **Security Fix:** Auth + RLS Policies implementiert (2026-01-30)
@@ -793,6 +793,8 @@ src/
 - ~~**CRITICAL:** BUG-1 (Keine Auth)~~ ✅ FIXED
 - ~~**HIGH:** BUG-2 (RLS Policies)~~ ✅ FIXED
 - ~~**HIGH:** BUG-5 (audit_log RLS bei DELETE)~~ ✅ FIXED
+- **HIGH:** BUG-6 (audit_log FK bei UPDATE) - 🔴 OFFEN
+- **MEDIUM:** BUG-7 (Duplikat-Fehlermeldung) - 🔴 OFFEN
 - **LOW:** BUG-3 (Zeichen-Counter) - offen
 - **LOW:** BUG-4 (Detail-Seite) - offen
 
@@ -800,11 +802,16 @@ src/
 
 ## Production-Ready Decision
 
-### ✅ **READY FOR PRODUCTION**
+### 🔴 **NICHT PRODUCTION READY**
 
-Alle kritischen Security-Issues wurden behoben:
+**Offene Bugs:**
+- 🔴 BUG-6: audit_log Foreign Key Constraint bei UPDATE (HIGH)
+- 🔴 BUG-7: Duplikat-Fehlermeldung nicht benutzerfreundlich (MEDIUM)
+
+**Bereits gefixt:**
 - ✅ BUG-1: Auth-Check in allen API-Routes (`requireAuth()`)
 - ✅ BUG-2: Ownership-basierte RLS-Policies
+- ✅ BUG-5: audit_log RLS bei DELETE
 
 ### Offene Low-Priority Issues (optional):
 - BUG-3: Zeichen-Counter bei Textfeldern
@@ -867,7 +874,71 @@ Alle kritischen Security-Issues wurden behoben:
 
 ---
 
-## 🚨 Production Bug (2026-01-30)
+## 🚨 Production Bugs (2026-01-30)
+
+### BUG-7: Duplikat-Fehlermeldung nicht benutzerfreundlich 🔴 OPEN
+
+- **Severity:** MEDIUM
+- **Status:** 🔴 **OPEN**
+- **Discovered:** 2026-01-30
+- **Error:** `duplicate key value violates unique constraint "suppliers_name_unique"`
+- **Operation:** POST /api/suppliers (Neuer Lieferant)
+
+**Steps to Reproduce:**
+1. Öffne https://stammdaten-produzent.vercel.app/suppliers
+2. Klicke "+ Neuer Lieferant"
+3. Gib einen Namen ein der bereits existiert (z.B. "Jan von Runkel")
+4. Klicke "Speichern"
+5. **Error:** Toast zeigt technische DB-Fehlermeldung statt benutzerfreundliche Message
+
+**Probleme:**
+1. **UX-Problem:** Rohe DB-Fehlermeldung statt "Lieferant mit diesem Namen existiert bereits"
+2. **Mögliches Soft-Delete Problem:** Wenn "Jan von Runkel" gelöscht wurde (soft-delete), sollte der Name wiederverwendbar sein. Der UNIQUE Constraint muss `WHERE deleted_at IS NULL` berücksichtigen (Partial Index).
+
+**Expected Behavior:**
+- Benutzerfreundliche Fehlermeldung: "Ein Lieferant mit dem Namen 'X' existiert bereits."
+- Link zum existierenden Lieferanten anbieten
+- Soft-deleted Namen sollten wiederverwendbar sein
+
+**Betroffene Dateien:**
+- [src/app/api/suppliers/route.ts](src/app/api/suppliers/route.ts) - POST Handler (Error Handling verbessern)
+- Supabase Migration: `suppliers_name_unique` → Partial Index mit `WHERE deleted_at IS NULL`
+
+---
+
+### BUG-6: audit_log Foreign Key Constraint bei UPDATE 🔴 OPEN
+
+- **Severity:** HIGH
+- **Status:** 🔴 **OPEN**
+- **Discovered:** 2026-01-30 nach BUG-5 Fix
+- **Error:** `insert or update on table "audit_log" violates foreign key constraint "audit_log_user_id_fkey"`
+- **Operation:** PATCH /api/suppliers/[id] (Lieferant bearbeiten)
+
+**Steps to Reproduce:**
+1. Öffne https://stammdaten-produzent.vercel.app/suppliers
+2. Klicke auf Bearbeiten-Icon bei einem Lieferanten
+3. Ändere irgendein Feld (z.B. Name)
+4. Klicke "Speichern"
+5. **Error:** Toast zeigt Foreign Key Constraint Fehler
+
+**Root Cause (Vermutung):**
+- Der `audit_trigger_function()` versucht `auth.uid()` zu speichern
+- Im Kontext des normalen Supabase Clients (anon key) ist `auth.uid()` möglicherweise NULL oder ungültig
+- Die `audit_log.user_id` hat einen Foreign Key zu `auth.users(id)`
+- Wenn die user_id nicht existiert → Foreign Key Violation
+
+**Unterschied zu BUG-5:**
+- BUG-5: RLS Policy blockierte INSERT in audit_log (Permission Problem)
+- BUG-6: Foreign Key Constraint verletzt (Data Integrity Problem)
+
+**Vermuteter Fix:**
+- PATCH Endpoint muss auch `supabaseAdmin` verwenden (wie DELETE)
+- Manueller Ownership-Check hinzufügen
+- Oder: audit_trigger_function() muss user_id anders ermitteln
+
+**Betroffene Datei:** [src/app/api/suppliers/[id]/route.ts](src/app/api/suppliers/[id]/route.ts) - PATCH Handler
+
+---
 
 ### BUG-5: audit_log RLS Policy blockiert Operationen ✅ FIXED
 
