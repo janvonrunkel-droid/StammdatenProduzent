@@ -376,9 +376,29 @@ function isHeaderOrFooter(line: string): boolean {
     /^(pos\.?|position|artikel|menge|preis|einheit|gesamt|summe|einzelpreis|gesamtpreis|bezeichnung|beschreibung|e\.?-?preis|g\.?-?preis|ep|gp|vk|ek)\b/i,
     /\b(pos\.?|menge|einheit|e\.?-?preis|g\.?-?preis|summe)\s+(pos\.?|menge|einheit|e\.?-?preis|g\.?-?preis|summe)/i, // Multiple column headers
 
-    // Page info
+    // Page info and transfers (Baustoff-Rechnungen)
     /^(seite|page)\s*\d/i,
     /^\d+\s*(von|\/)\s*\d+$/, // "1 von 3" or "1/3"
+    /übertrag\s+(auf|von)\s+seite/i, // "Übertrag auf Seite 2" / "Übertrag von Seite 1"
+    /^übertrag\b/i,
+
+    // Document metadata labels (not positions!)
+    /^datum[\s:]/i, // "Datum: .2025"
+    /^beleg[\s:]/i, // "Beleg KLS..."
+    /^lieferschein[\s:]/i,
+    /^rechnung[\s:]/i,
+    /^auftrag[\s:]/i,
+    /^bestell/i,
+    /^kunde[\s:]/i,
+    /^kunden-?nr/i,
+    /geliefert\s+am/i, // "geliefert am: .2025"
+    /eliefert\s+am/i, // typo variant "eliefert am"
+
+    // Supplier/Vendor info
+    /groß\s*bvh/i, // "Groß Bvh: Saint Gobain"
+    /^lieferant/i,
+    /^verkäufer/i,
+    /^händler/i,
 
     // Contact/footer info
     /^(tel\.?|telefon|fax|email|e-mail|www\.|http|@)/i,
@@ -495,34 +515,50 @@ function tryMultiplyFormat(line: string): ExtractedPosition | null {
 }
 
 /**
- * Try to match line against simple format: just article + price at end
+ * Check if a string looks like a valid article name (not just metadata or junk)
  */
-function trySimpleFormat(line: string): ExtractedPosition | null {
-  PATTERNS.lineItemSimple.lastIndex = 0
-  const match = PATTERNS.lineItemSimple.exec(line)
+function isValidArticleName(name: string): boolean {
+  if (!name || name.length < 4) return false
 
-  if (match) {
-    const [, articleNum, articleName, priceStr] = match
+  const lowerName = name.toLowerCase().trim()
 
-    const cleanName = articleName.trim()
-    // Skip if name is too short or looks like header
-    if (cleanName.length < 4) return null
-
-    const totalPrice = parseGermanNumber(priceStr)
-    if (!totalPrice || totalPrice <= 0) return null
-
-    return {
-      line_number: 0,
-      article_name: cleanName,
-      article_number: articleNum || null,
-      quantity: 1,
-      unit: 'Stk',
-      price_per_unit: totalPrice,
-      total_price: totalPrice,
-      confidence: 0.6,
-      raw_line: line,
-    }
+  // Reject if it's just a unit/quantity pattern like "0 lfdm.", "Pack", "0 qm"
+  if (/^\d*\s*(lfdm\.?|qm|m²|m³|stk\.?|pack|paket|rolle|stück|kg|meter|cm|mm)\.?$/i.test(name)) {
+    return false
   }
+
+  // Reject if it starts with "Artikelnummer:" (this is the article number, not name)
+  if (/^artikelnummer[\s:]/i.test(name)) {
+    return false
+  }
+
+  // Reject metadata labels
+  if (/^(datum|beleg|lieferschein|rechnung|auftrag|kunde|übertrag)[\s:]/i.test(name)) {
+    return false
+  }
+
+  // Reject if it's mostly numbers and punctuation (like dates "01.12.2025")
+  const alphaCount = (name.match(/[a-zäöüß]/gi) || []).length
+  if (alphaCount < 3) {
+    return false
+  }
+
+  // Reject very short generic words
+  const shortJunkWords = ['pack', 'stk', 'stück', 'rolle', 'sack', 'paket', 'karton', 'bund']
+  if (shortJunkWords.includes(lowerName.replace(/[.\s]/g, ''))) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Try to match line against simple format: just article + price at end
+ * DISABLED: This pattern is too aggressive and matches metadata lines
+ */
+function trySimpleFormat(_line: string): ExtractedPosition | null {
+  // Disabled - this pattern caused too many false positives
+  // matching lines like "Datum: .2025 1,12" as articles
   return null
 }
 
@@ -602,8 +638,13 @@ function extractPositionFromLine(line: string, index: number): ExtractedPosition
     .replace(/\s+/g, ' ')
     .trim()
 
-  // Skip if article name is too short or just numbers/special chars
+  // Skip if article name is too short, just numbers/special chars, or invalid
   if (!articleName || articleName.length < 3 || /^[\d\s.,\-€]+$/.test(articleName)) {
+    return null
+  }
+
+  // Additional validation: reject junk article names
+  if (!isValidArticleName(articleName)) {
     return null
   }
 
