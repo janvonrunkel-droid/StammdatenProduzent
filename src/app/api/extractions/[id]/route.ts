@@ -91,6 +91,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     reviewer = reviewerData
   }
 
+  // Generate signed URL for PDF if file_path exists
+  let fileUrl = null
+  if (document?.file_path) {
+    const storagePath = document.file_path.includes('supabase.co')
+      ? document.file_path.split('/documents/')[1]
+      : document.file_path
+
+    const { data: signedData } = await supabase.storage
+      .from('documents')
+      .createSignedUrl(storagePath, 3600)  // 1 hour expiry
+
+    fileUrl = signedData?.signedUrl || null
+  }
+
   return NextResponse.json({
     id: extraction.id,
     document_id: extraction.document_id,
@@ -106,6 +120,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       id: document.id,
       original_filename: document.original_filename,
       file_path: document.file_path,
+      file_url: fileUrl,  // Add signed URL for PDF viewer
       status: document.status,
     } : null,
     matched_supplier: matchedSupplier,
