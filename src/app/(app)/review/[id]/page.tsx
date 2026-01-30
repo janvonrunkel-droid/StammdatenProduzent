@@ -165,7 +165,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
   const { data: suppliersData } = useQuery<SuppliersResponse>({
     queryKey: ['suppliers', 'dropdown'],
     queryFn: async () => {
-      const response = await fetch('/api/suppliers?limit=1000')
+      const response = await fetch('/api/suppliers?limit=1000', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Lieferanten')
       return response.json()
     },
@@ -175,7 +175,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
   const { data: unitsData } = useQuery<UnitsResponse>({
     queryKey: ['units'],
     queryFn: async () => {
-      const response = await fetch('/api/units')
+      const response = await fetch('/api/units', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Einheiten')
       return response.json()
     },

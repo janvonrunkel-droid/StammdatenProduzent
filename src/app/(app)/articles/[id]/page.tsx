@@ -116,7 +116,7 @@ export default function ArticleDetailPage() {
   const { data: unitsData } = useQuery<{ data: Unit[] }>({
     queryKey: ['units'],
     queryFn: async () => {
-      const response = await fetch('/api/units')
+      const response = await fetch('/api/units', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Einheiten')
       return response.json()
     },
@@ -126,7 +126,7 @@ export default function ArticleDetailPage() {
   const { data: tagsData } = useQuery<{ data: Tag[] }>({
     queryKey: ['tags'],
     queryFn: async () => {
-      const response = await fetch('/api/tags')
+      const response = await fetch('/api/tags', { credentials: 'include' })
       if (!response.ok) throw new Error('Fehler beim Laden der Tags')
       return response.json()
     },

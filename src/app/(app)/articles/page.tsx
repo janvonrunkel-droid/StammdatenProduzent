@@ -99,13 +99,11 @@ function ArticlesPageContent() {
     },
   })
 
-  // Fetch suppliers
-  const { data: suppliersData, isError: suppliersError, error: suppliersErrorDetails } = useQuery<{ data: Supplier[] }>({
-    queryKey: ['suppliers'],
+  // Fetch suppliers for filter dropdown
+  const { data: suppliersData } = useQuery<{ data: Supplier[] }>({
+    queryKey: ['suppliers', 'dropdown'],
     queryFn: async () => {
-      const response = await fetch('/api/suppliers?limit=1000', {
-        credentials: 'include', // Ensure cookies are sent
-      })
+      const response = await fetch('/api/suppliers?limit=1000', { credentials: 'include' })
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Suppliers API error:', response.status, errorText)
@@ -115,13 +113,8 @@ function ArticlesPageContent() {
       console.log('Suppliers loaded:', data?.data?.length || 0, 'suppliers')
       return data
     },
-    staleTime: 0, // Always fetch fresh data
   })
 
-  // Log supplier loading issues
-  if (suppliersError) {
-    console.error('Suppliers query error:', suppliersErrorDetails)
-  }
 
   // Build query params for articles
   const articleQueryParams = useMemo(() => {
