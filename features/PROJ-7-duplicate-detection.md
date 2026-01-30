@@ -1,6 +1,7 @@
 # PROJ-7: Duplikaterkennung
 
-**Status:** ✅ Ready for Production
+**Status:** ✅ Deployed (2026-01-30)
+**Production URL:** https://stammdaten-produzent.vercel.app/duplicates
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
 
