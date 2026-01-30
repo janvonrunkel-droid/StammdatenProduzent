@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase, user } = auth
+  // Use supabaseAdmin for storage and DB operations (bypasses RLS after auth verified)
+  const { supabaseAdmin: supabase, user } = auth
 
   // BUG-SEC-4 Fix: Check rate limit
   const rateLimit = checkRateLimit(user.id)

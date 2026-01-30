@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase, user } = auth
+  // Use supabaseAdmin for DB/storage operations (bypasses RLS after auth verified)
+  const { supabaseAdmin: supabase, user } = auth
 
   const searchParams = request.nextUrl.searchParams
   const queryResult = documentQuerySchema.safeParse({

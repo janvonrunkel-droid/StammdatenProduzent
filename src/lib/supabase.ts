@@ -6,9 +6,24 @@ import type { Database } from './database.types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 // Browser client (for client components) - legacy export
 export const supabase = createBrowserSupabaseClient<Database>(supabaseUrl, supabaseAnonKey)
+
+// Service Role client for trusted server-side operations (bypasses RLS)
+// Only use AFTER verifying user authentication with requireAuth()
+export function createServiceClient() {
+  if (!supabaseServiceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
+  }
+  return createBrowserSupabaseClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
 
 // Server client factory (for API routes and server components)
 // Uses cookies for authentication
@@ -36,10 +51,18 @@ export async function createServerClient() {
 }
 
 // Auth check helper for API routes
-// Returns { user, supabase } on success, or { error, response } on failure
+// Returns { user, supabase, supabaseAdmin } on success, or { error, response } on failure
+// supabase: cookie-based client for user-context operations
+// supabaseAdmin: service role client for trusted server operations (bypasses RLS)
 export async function requireAuth(): Promise<
-  | { user: { id: string; email?: string }; supabase: Awaited<ReturnType<typeof createServerClient>>; error?: never; response?: never }
-  | { user?: never; supabase?: never; error: string; response: NextResponse }
+  | {
+      user: { id: string; email?: string }
+      supabase: Awaited<ReturnType<typeof createServerClient>>
+      supabaseAdmin: ReturnType<typeof createServiceClient>
+      error?: never
+      response?: never
+    }
+  | { user?: never; supabase?: never; supabaseAdmin?: never; error: string; response: NextResponse }
 > {
   const supabase = await createServerClient()
 
@@ -55,5 +78,8 @@ export async function requireAuth(): Promise<
     }
   }
 
-  return { user, supabase }
+  // Create admin client for trusted server-side DB operations
+  const supabaseAdmin = createServiceClient()
+
+  return { user, supabase, supabaseAdmin }
 }

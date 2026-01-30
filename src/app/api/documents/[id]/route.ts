@@ -13,7 +13,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase, user } = auth
+  // Use supabaseAdmin for DB/storage operations (bypasses RLS after auth verified)
+  const { supabaseAdmin: supabase, user } = auth
 
   const { id } = await params
 
@@ -96,7 +97,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase, user } = auth
+  // Use supabaseAdmin for DB operations (bypasses RLS after auth verified)
+  const { supabaseAdmin: supabase, user } = auth
 
   const { id } = await params
 
@@ -177,7 +179,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase, user } = auth
+  // Use supabaseAdmin for DB/storage operations (bypasses RLS after auth verified)
+  const { supabaseAdmin: supabase, user } = auth
 
   const { id } = await params
 
