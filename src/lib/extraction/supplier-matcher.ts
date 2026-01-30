@@ -29,7 +29,8 @@ const MIN_FUZZY_SCORE = 70 // fuzzball score (0-100)
 /**
  * Clean and normalize company name for comparison
  */
-function normalizeCompanyName(name: string): string {
+function normalizeCompanyName(name: string | undefined | null): string {
+  if (!name) return ''
   return name
     .toLowerCase()
     .replace(/gmbh|ag|kg|e\.?k\.?|ohg|gbr|ug|mbh|inc\.?|ltd\.?|co\.?/gi, '')

@@ -243,7 +243,8 @@ export function parseGermanNumber(str: string): number | null {
 /**
  * Normalize unit to standard format
  */
-export function normalizeUnit(unit: string): string {
+export function normalizeUnit(unit: string | undefined | null): string | null {
+  if (!unit) return null
   const lower = unit.toLowerCase().trim()
   return UNIT_MAPPINGS[lower] || unit
 }
