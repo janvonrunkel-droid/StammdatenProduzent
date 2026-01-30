@@ -192,11 +192,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const pdfBuffer = Buffer.from(await fileData.arrayBuffer())
 
     // 4. Extract data from PDF (with timeout)
+    console.log(`[Extract] Starting PDF extraction for document ${documentId}, buffer size: ${pdfBuffer.length} bytes`)
+
     let extractionResult = await withTimeout(
       extractFromPdf(pdfBuffer),
       EXTRACTION_TIMEOUT_MS,
       'Timeout: PDF-Extraktion dauerte zu lange (>5 Minuten)'
     )
+
+    // Debug: Log extraction result
+    if (!isExtractionError(extractionResult)) {
+      const rawTextLength = extractionResult.raw_text?.length || 0
+      const rawTextPreview = extractionResult.raw_text?.substring(0, 500) || '[NO RAW TEXT]'
+      console.log(`[Extract] PDF text extracted: ${rawTextLength} chars, ${extractionResult.positions.length} positions found`)
+      console.log(`[Extract] Raw text preview: ${rawTextPreview}`)
+      console.log(`[Extract] Supplier detected: ${extractionResult.supplier_detected}, Date: ${extractionResult.document_date_detected}`)
+    }
 
     // Check for extraction error
     if (isExtractionError(extractionResult)) {
@@ -229,25 +240,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // 5. Check if LLM fallback is needed (with separate timeout for LLM)
     let usedLLM = false
-    if (shouldUseLLM(extractionResult)) {
-      console.log(`[Extract] Using LLM fallback for document ${documentId}`)
+    const needsLLM = shouldUseLLM(extractionResult)
+    console.log(`[Extract] LLM fallback needed: ${needsLLM}, positions: ${extractionResult.positions.length}`)
 
-      // LLM has its own timeout (30 seconds is reasonable for API call)
-      const LLM_TIMEOUT_MS = 30 * 1000
-      try {
-        const llmResult = await withTimeout(
-          extractWithLLM(extractionResult.raw_text || ''),
-          LLM_TIMEOUT_MS,
-          'Timeout: LLM-Verarbeitung dauerte zu lange'
-        )
-        if (llmResult) {
-          extractionResult = convertLLMResult(llmResult, extractionResult.page_count)
-          usedLLM = true
+    if (needsLLM) {
+      const rawTextForLLM = extractionResult.raw_text || ''
+      console.log(`[Extract] Using LLM fallback for document ${documentId}, text length for LLM: ${rawTextForLLM.length}`)
+
+      if (rawTextForLLM.length < 50) {
+        console.error(`[Extract] ERROR: raw_text is too short for LLM (${rawTextForLLM.length} chars). This indicates a bug in text extraction.`)
+        extractionResult.warnings.push('LLM-Fallback uebersprungen: Kein extrahierbarer Text vorhanden')
+      } else {
+        // LLM has its own timeout (30 seconds is reasonable for API call)
+        const LLM_TIMEOUT_MS = 30 * 1000
+        try {
+          const llmResult = await withTimeout(
+            extractWithLLM(rawTextForLLM),
+            LLM_TIMEOUT_MS,
+            'Timeout: LLM-Verarbeitung dauerte zu lange'
+          )
+          console.log(`[Extract] LLM result: ${llmResult ? `${llmResult.positions.length} positions` : 'null'}`)
+          if (llmResult) {
+            extractionResult = convertLLMResult(llmResult, extractionResult.page_count)
+            usedLLM = true
+          }
+        } catch (llmError) {
+          // LLM timeout is not fatal - continue with regex results
+          console.warn(`[Extract] LLM fallback failed: ${llmError}`)
+          extractionResult.warnings.push('LLM-Fallback fehlgeschlagen, nur Regex-Ergebnisse')
         }
-      } catch (llmError) {
-        // LLM timeout is not fatal - continue with regex results
-        console.warn(`[Extract] LLM fallback failed: ${llmError}`)
-        extractionResult.warnings.push('LLM-Fallback fehlgeschlagen, nur Regex-Ergebnisse')
       }
     }
 

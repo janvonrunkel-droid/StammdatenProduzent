@@ -633,6 +633,7 @@ export async function extractFromPdf(
       totals,
       extraction_method: 'pdfplumber+regex',
       warnings,
+      raw_text: text, // IMPORTANT: Include raw text for LLM fallback
       has_extractable_text: true,
       page_count: data.numpages,
     }
