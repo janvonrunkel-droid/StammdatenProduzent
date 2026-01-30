@@ -1,8 +1,9 @@
 # PROJ-5: PDF-Datenextraktion
 
-**Status:** ✅ Komplett (Backend + Frontend implementiert)
+**Status:** 🚀 Deployed (Production)
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
+**Deployed:** 2026-01-30
 **Tech-Design:** ✅ Approved (2026-01-30)
 **Backend Progress:** ✅ Komplett (Teil 1 + Teil 2)
 **Frontend Progress:** ✅ Komplett (Teil 3 implementiert)
@@ -1245,3 +1246,40 @@ Erweitern:
   - OPENAI_API_KEY muss konfiguriert werden fuer LLM-Fallback
   - tags-Tabelle bleibt shared resource (intentional)
 - **Backend Fixes implementiert von:** Backend Developer Agent
+
+---
+
+## 🚀 Deployment Notes (2026-01-30)
+
+**Deployed to:** Production (Vercel)
+**Deployed by:** DevOps Engineer Agent
+
+### Regex-Optimierung (Post-Deployment)
+
+Mehrere Iterationen zur Optimierung der Regex-Patterns für deutsche Rechnungen:
+
+1. **Commit `3a01bda`:** Initiale Regex-Erweiterung
+   - 50+ deutsche Einheiten (LE, VE, PE, Pkg, etc.)
+   - Neue Pattern für verschiedene Rechnungsformate
+   - tryStandardFormat(), tryMultiplyFormat(), trySimpleFormat()
+
+2. **Commit `03e81cb`:** Junk-Filterung
+   - isValidArticleName() hinzugefügt
+   - isHeaderOrFooter() erweitert für "Übertrag", "Datum:", etc.
+   - Problem: Filter zu aggressiv, 0 Regex-Positionen
+
+3. **Commit `e4f3216`:** Balance-Fix
+   - Filter gelockert
+   - trySimpleFormat() mit strengeren Checks reaktiviert
+   - Aktueller Stand: Regex funktioniert, aber Baustoff-Rechnungen (mehrzeilig) nutzen LLM
+
+### Bekannte Einschränkungen
+
+- **Mehrzeilige Rechnungsformate:** Baustoff-Rechnungen wie "Bauen und Leben" haben Artikelnummer, Name und Preise auf separaten Zeilen. Diese werden über LLM-Fallback verarbeitet (~5 Cent/PDF).
+- **OPENAI_API_KEY:** Muss in Production-Environment konfiguriert sein für LLM-Fallback.
+
+### Kostenschätzung
+
+- Regex-Extraktion: Kostenlos
+- LLM-Fallback (GPT-4o-mini): ~5 Cent/PDF
+- Geschätzt ~30-50% der PDFs benötigen LLM-Fallback (mehrzeilige Formate)

@@ -51,6 +51,7 @@ export interface ExtractionPosition {
   total_price: number | null
   confidence: number
   calculated?: boolean
+  page?: number // Page number where this position was found (for PDF sync)
 }
 
 export interface ExtractionTotals {

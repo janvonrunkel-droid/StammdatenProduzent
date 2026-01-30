@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .from('extractions')
     .select(`
       *,
-      document:documents(id, original_filename, status, created_by, supplier_id)
+      document:documents(id, original_filename, file_path, status, created_by, supplier_id)
     `)
     .eq('id', extractionId)
     .single()
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   // Authorization check via document ownership
-  const document = extraction.document as { id: string; original_filename: string | null; status: string; created_by: string | null; supplier_id: string | null } | null
+  const document = extraction.document as { id: string; original_filename: string | null; file_path: string | null; status: string; created_by: string | null; supplier_id: string | null } | null
   if (document?.created_by && document.created_by !== user.id) {
     return NextResponse.json(
       { error: 'Zugriff verweigert' },
@@ -105,6 +105,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     document: document ? {
       id: document.id,
       original_filename: document.original_filename,
+      file_path: document.file_path,
       status: document.status,
     } : null,
     matched_supplier: matchedSupplier,
