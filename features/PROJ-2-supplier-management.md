@@ -1,9 +1,11 @@
 # PROJ-2: Lieferanten-Verwaltung
 
-**Status:** 🟢 Production Ready
+**Status:** 🟠 Production Bug - DELETE funktioniert nicht
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-30
 **Security Fix:** Auth + RLS Policies implementiert (2026-01-30)
+**Production URL:** https://stammdaten-produzent.vercel.app/suppliers
+**Deployed:** 2026-01-30 (Commit `e3a8479`)
 
 ---
 
@@ -838,3 +840,91 @@ Alle kritischen Security-Issues wurden behoben:
    - UPDATE/DELETE: `created_by = auth.uid() OR created_by IS NULL`
 
 3. **created_by Tracking:** User-ID wird beim INSERT automatisch gesetzt
+
+---
+
+## Deployment Log (2026-01-30)
+
+### Deployment durchgeführt von: DevOps Engineer Agent
+
+**Pre-Deployment Checks:**
+- ✅ Local Build erfolgreich (`npm run build`)
+- ✅ Security Bugs BUG-1 und BUG-2 waren bereits gefixt
+- ✅ Supabase Security Advisor: Keine Warnings für `suppliers` Tabelle
+- ✅ Environment Variables konfiguriert
+
+**Deployment:**
+- ✅ Feature-Spec Status aktualisiert
+- ✅ Git Commit: `e3a8479` - "deploy(PROJ-2): Lieferanten-Verwaltung to production"
+- ✅ Push zu main Branch
+- ✅ Vercel Auto-Deploy ausgelöst
+
+---
+
+## 🚨 Production Bug (2026-01-30)
+
+### BUG-5: audit_log RLS Policy blockiert Operationen
+
+- **Severity:** HIGH
+- **Status:** 🔴 OFFEN - Muss vom Backend Developer gefixt werden
+- **Discovered:** 2026-01-30 nach Deployment
+- **Error:** `new row violates row-level security policy for table "audit_log"`
+
+**Symptome:**
+| Operation | Status |
+|-----------|--------|
+| Anlegen | ✅ Funktioniert |
+| Bearbeiten | ✅ Funktioniert |
+| Löschen | ❌ RLS Error |
+
+**Root Cause Analyse:**
+- `audit_log` Tabelle hat RLS aktiviert
+- Es existiert ein Trigger `audit_suppliers` der bei INSERT/UPDATE/DELETE feuert
+- Trigger-Funktion `audit_trigger_function()` schreibt in `audit_log`
+- Bei DELETE-Operationen schlägt der INSERT in `audit_log` fehl
+
+**Versuchte Fixes (DevOps - nicht erfolgreich):**
+
+1. **Migration `fix_audit_log_rls_policy`:**
+   ```sql
+   CREATE POLICY "Authenticated users can insert audit_log"
+   ON public.audit_log FOR INSERT TO authenticated WITH CHECK (true);
+
+   CREATE POLICY "Service role can manage audit_log"
+   ON public.audit_log FOR ALL TO service_role USING (true) WITH CHECK (true);
+   ```
+   → Ergebnis: Anlegen + Bearbeiten funktioniert, Löschen nicht
+
+2. **Migration `fix_audit_trigger_security_definer`:**
+   ```sql
+   CREATE OR REPLACE FUNCTION audit_trigger_function()
+   RETURNS TRIGGER LANGUAGE plpgsql
+   SECURITY DEFINER SET search_path = public AS $$...$$;
+   ```
+   → Ergebnis: Löschen funktioniert immer noch nicht
+
+**Für Backend Developer zu prüfen:**
+- Wie wird DELETE in der API ausgeführt? (Soft-Delete via UPDATE oder separater Mechanismus?)
+- Wird der richtige Supabase Client verwendet? (anon key vs service_role key)
+- RLS Context bei DELETE-Trigger Operations
+- Warum funktioniert INSERT/UPDATE aber DELETE nicht?
+
+**Betroffene Dateien:**
+- [src/app/api/suppliers/[id]/route.ts](src/app/api/suppliers/[id]/route.ts) - DELETE endpoint (Zeile 156-220)
+- Supabase: `audit_log` Tabelle
+- Supabase: `audit_trigger_function()` Funktion
+- Supabase: `audit_suppliers` Trigger auf `suppliers` Tabelle
+
+**Aktuelle RLS Policies auf audit_log:**
+- `Authenticated users can view audit_log` (SELECT)
+- `Authenticated users can insert audit_log` (INSERT) - hinzugefügt
+- `Service role can manage audit_log` (ALL) - hinzugefügt
+
+**Trigger Details:**
+```sql
+-- Trigger feuert bei INSERT, UPDATE, DELETE auf suppliers
+audit_suppliers → EXECUTE FUNCTION audit_trigger_function()
+
+-- Funktion (jetzt SECURITY DEFINER):
+audit_trigger_function() → INSERT INTO audit_log (...)
+```
