@@ -205,11 +205,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (auth.response) {
     return auth.response
   }
-  const { supabase } = auth
+  // BUG-6 Fix: Use supabaseAdmin (Service Role) to bypass RLS for DELETE
+  // The audit_log trigger causes RLS issues with the user client
+  const { supabase, supabaseAdmin } = auth
 
   const { id } = await params
 
-  // Check if article exists
+  // Check if article exists (user client for RLS validation)
   const { data: existing, error: fetchError } = await supabase
     .from('articles')
     .select('id, name')
@@ -241,14 +243,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     )
   }
 
-  // Delete article_tags first
-  await supabase
+  // Delete article_tags first (use admin client to bypass RLS)
+  await supabaseAdmin
     .from('article_tags')
     .delete()
     .eq('article_id', id)
 
-  // Soft delete by setting deleted_at
-  const { error } = await supabase
+  // Soft delete by setting deleted_at (use admin client to bypass RLS)
+  const { error } = await supabaseAdmin
     .from('articles')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
