@@ -604,27 +604,32 @@ export async function extractFromPdf(
 
     return result
   } catch (error: unknown) {
+    // Log the full error for debugging
+    console.error('PDF extraction error:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error('Error stack:', errorStack)
+
     // Handle specific PDF errors
     if (error instanceof Error) {
-      if (error.message.includes('password') || error.message.includes('encrypted')) {
+      if (errorMessage.includes('password') || errorMessage.includes('encrypted')) {
         return {
           error: 'pdf_encrypted',
           message: 'PDF ist passwortgeschützt. Bitte ein ungeschütztes PDF hochladen.',
         }
       }
 
-      if (error.message.includes('Invalid') || error.message.includes('corrupt')) {
+      if (errorMessage.includes('Invalid') || errorMessage.includes('corrupt')) {
         return {
           error: 'pdf_unreadable',
-          message: 'PDF konnte nicht gelesen werden. Die Datei ist möglicherweise beschädigt.',
+          message: `PDF konnte nicht gelesen werden: ${errorMessage}`,
         }
       }
     }
 
-    console.error('PDF extraction error:', error)
     return {
       error: 'extraction_failed',
-      message: `Extraktion fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
+      message: `Extraktion fehlgeschlagen: ${errorMessage}`,
     }
   }
 }
