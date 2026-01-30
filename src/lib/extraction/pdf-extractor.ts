@@ -53,14 +53,15 @@ async function getPdfParse(): Promise<PdfParseFunc> {
     // Try multiple access patterns to handle different versions and bundlers
     let pdfParse: PdfParseFunc | undefined
 
-    // pdf-parse v2: PDFParse class with static parse method or constructor
+    // pdf-parse v2: PDFParse class with getText method
     if (module.PDFParse) {
       const PDFParse = module.PDFParse
-      // v2 uses: new PDFParse(buffer) then .parse() or PDFParse.parse(buffer)
+      // v2 API: new PDFParse({ data: Buffer }) then .getText()
       pdfParse = async (buffer: Buffer) => {
-        const parser = new PDFParse(buffer)
-        const result = await parser.parse()
-        return { numpages: result.pages?.length || 1, text: result.text || '' }
+        const parser = new PDFParse({ data: buffer })
+        const textResult = await parser.getText()
+        await parser.destroy() // Clean up resources
+        return { numpages: textResult.total || 1, text: textResult.text || '' }
       }
     } else if (typeof module === 'function') {
       // Direct function export (v1 style)
