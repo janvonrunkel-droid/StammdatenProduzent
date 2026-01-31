@@ -35,8 +35,8 @@ export interface PriceStats {
   count: number
 }
 
-// Omit search_vector from Article as it's not returned from the API
-export interface ArticleWithRelations extends Omit<Article, 'search_vector'> {
+// Omit search_vector and embedding from Article as they're not returned from the API
+export interface ArticleWithRelations extends Omit<Article, 'search_vector' | 'embedding'> {
   unit: Unit | null
   tags: Tag[]
   price_stats?: PriceStats

@@ -226,6 +226,11 @@ function CurrencyInput({
     setIsFocused(true)
   }
 
+  // Prevent keyboard events from bubbling to parent (fixes Backspace in ResizablePanelGroup)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation()
+  }
+
   return (
     <Input
       ref={inputRef}
@@ -233,6 +238,7 @@ function CurrencyInput({
       onChange={handleChange}
       onBlur={handleBlur}
       onFocus={handleFocus}
+      onKeyDown={handleKeyDown}
       className={className}
       placeholder={placeholder}
     />
@@ -337,18 +343,18 @@ export function ReviewPositionsTable({
         </div>
       ) : (
         <>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
+          <div className="rounded-md border overflow-x-auto max-w-full">
+            <Table className="min-w-[1000px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">#</TableHead>
-                  <TableHead className="min-w-[200px]">Artikel</TableHead>
+                  <TableHead className="w-[40px]">#</TableHead>
+                  <TableHead className="min-w-[180px]">Artikel</TableHead>
                   <TableHead className="w-[100px]">Menge</TableHead>
                   <TableHead className="w-[100px]">Einheit</TableHead>
                   <TableHead className="w-[120px]">Einzelpreis</TableHead>
                   <TableHead className="w-[120px]">Gesamt</TableHead>
-                  <TableHead className="w-[180px]">Match</TableHead>
-                  <TableHead className="w-[120px] text-right">Aktionen</TableHead>
+                  <TableHead className="w-[140px]">Match</TableHead>
+                  <TableHead className="w-[100px] text-right">Aktionen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -367,12 +373,14 @@ export function ReviewPositionsTable({
                           <Input
                             value={position.article_name}
                             onChange={(e) => onPositionChange(originalIndex, 'article_name', e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
                             placeholder="Artikelbezeichnung"
                             className="h-8"
                           />
                           <Input
                             value={position.article_number || ''}
                             onChange={(e) => onPositionChange(originalIndex, 'article_number', e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
                             placeholder="Artikelnummer (optional)"
                             className="h-7 text-xs"
                           />
@@ -384,6 +392,7 @@ export function ReviewPositionsTable({
                           step="0.01"
                           value={position.quantity ?? ''}
                           onChange={(e) => onPositionChange(originalIndex, 'quantity', e.target.value ? parseFloat(e.target.value) : null)}
+                          onKeyDown={(e) => e.stopPropagation()}
                           className="h-8 text-right"
                         />
                       </TableCell>

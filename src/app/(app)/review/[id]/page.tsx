@@ -745,7 +745,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
 
         {/* Editor Panel */}
         <ResizablePanel defaultSize={50} minSize={30}>
-          <ScrollArea className="h-full">
+          <ScrollArea className="h-full" orientation="both">
             <div className="p-4 space-y-6">
               {/* Warnings */}
               {rawData.warnings && rawData.warnings.length > 0 && (

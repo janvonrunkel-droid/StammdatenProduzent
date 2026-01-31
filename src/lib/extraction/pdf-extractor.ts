@@ -448,6 +448,12 @@ function tryStandardFormat(line: string): ExtractedPosition | null {
   if (match) {
     const [, posNum, articleName, qtyStr, unitStr, unitPriceStr, totalPriceStr] = match
 
+    // Validate article name - reject invalid names like "Artikelnummer: XXX"
+    const cleanName = articleName.trim()
+    if (!isValidArticleName(cleanName)) {
+      return null
+    }
+
     const quantity = parseGermanNumber(qtyStr)
     const unit = normalizeUnit(unitStr)
     const pricePerUnit = parseGermanNumber(unitPriceStr)
@@ -464,7 +470,7 @@ function tryStandardFormat(line: string): ExtractedPosition | null {
 
     return {
       line_number: parseInt(posNum) || 0,
-      article_name: articleName.trim(),
+      article_name: cleanName,
       article_number: null,
       quantity,
       unit,
@@ -487,6 +493,12 @@ function tryMultiplyFormat(line: string): ExtractedPosition | null {
   if (match) {
     const [, articleName, qtyStr, unitPriceStr, totalPriceStr] = match
 
+    // Validate article name - reject invalid names like "Artikelnummer: XXX"
+    const cleanName = articleName.trim()
+    if (!isValidArticleName(cleanName)) {
+      return null
+    }
+
     const quantity = parseGermanNumber(qtyStr)
     const pricePerUnit = parseGermanNumber(unitPriceStr)
     const totalPrice = parseGermanNumber(totalPriceStr)
@@ -501,7 +513,7 @@ function tryMultiplyFormat(line: string): ExtractedPosition | null {
 
     return {
       line_number: 0,
-      article_name: articleName.trim(),
+      article_name: cleanName,
       article_number: null,
       quantity,
       unit: 'Stk',
