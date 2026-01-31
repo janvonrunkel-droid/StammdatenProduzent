@@ -16,13 +16,15 @@ import {
   Scale,
   Tags as TagsIcon,
   AlertCircle,
-  Loader2
+  Loader2,
+  TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -46,6 +48,7 @@ import { toast } from 'sonner'
 import { useState } from 'react'
 import type { Unit, Tag } from '@/lib/database.types'
 import { ArticleForm, TagFormDialog, UnitFormDialog } from '@/components/articles'
+import { PriceHistoryTab } from '@/components/price-history'
 import type { CreateArticleInput } from '@/lib/validations/article'
 import type { CreateTagInput } from '@/lib/validations/tag'
 import type { CreateUnitInput } from '@/lib/validations/unit'
@@ -346,179 +349,186 @@ export default function ArticleDetailPage() {
         </Alert>
       )}
 
-      {/* Main Content */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Basic Info Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Stammdaten
-            </CardTitle>
-            <CardDescription>Grundlegende Artikelinformationen</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              <div className="flex items-start gap-3">
-                <Hash className="h-4 w-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Artikelnummer</p>
-                  <p className="text-sm text-muted-foreground">
-                    {article.article_number || 'Nicht angegeben'}
-                  </p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-3">
-                <Scale className="h-4 w-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Einheit</p>
-                  <p className="text-sm text-muted-foreground">
-                    {article.unit ? (
-                      <>
-                        {article.unit.name}
-                        {article.unit.abbreviation && (
-                          <span className="ml-1">({article.unit.abbreviation})</span>
+      {/* Tabs for Overview and Price History */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Übersicht
+          </TabsTrigger>
+          <TabsTrigger value="prices" className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Preishistorie
+            {article.price_count > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {article.price_count}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Main Content */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Basic Info Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Stammdaten
+                </CardTitle>
+                <CardDescription>Grundlegende Artikelinformationen</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3">
+                  <div className="flex items-start gap-3">
+                    <Hash className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Artikelnummer</p>
+                      <p className="text-sm text-muted-foreground">
+                        {article.article_number || 'Nicht angegeben'}
+                      </p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex items-start gap-3">
+                    <Scale className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Einheit</p>
+                      <p className="text-sm text-muted-foreground">
+                        {article.unit ? (
+                          <>
+                            {article.unit.name}
+                            {article.unit.abbreviation && (
+                              <span className="ml-1">({article.unit.abbreviation})</span>
+                            )}
+                          </>
+                        ) : (
+                          'Nicht angegeben'
                         )}
-                      </>
-                    ) : (
-                      'Nicht angegeben'
-                    )}
-                  </p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-3">
-                <TagsIcon className="h-4 w-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Tags</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {article.tags.length > 0 ? (
-                      article.tags.map((tag) => (
-                        <Badge
-                          key={tag.id}
-                          variant="secondary"
-                          style={{
-                            backgroundColor: tag.color ? `${tag.color}20` : undefined,
-                            color: tag.color || undefined,
-                            borderColor: tag.color || undefined,
-                          }}
-                          className="border"
-                        >
-                          {tag.name}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Keine Tags</span>
-                    )}
+                      </p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex items-start gap-3">
+                    <TagsIcon className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Tags</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {article.tags.length > 0 ? (
+                          article.tags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              variant="secondary"
+                              style={{
+                                backgroundColor: tag.color ? `${tag.color}20` : undefined,
+                                color: tag.color || undefined,
+                                borderColor: tag.color || undefined,
+                              }}
+                              className="border"
+                            >
+                              {tag.name}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Keine Tags</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Metadata Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Metadaten
-            </CardTitle>
-            <CardDescription>Erstellung und letzte Änderung</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              <div className="flex items-start gap-3">
-                <Calendar className="h-4 w-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Erstellt am</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDateTime(article.created_at)}
-                  </p>
+            {/* Metadata Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Metadaten
+                </CardTitle>
+                <CardDescription>Erstellung und letzte Änderung</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3">
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Erstellt am</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDateTime(article.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Letzte Änderung</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDateTime(article.updated_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex items-start gap-3">
+                    <Package className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Verknüpfte Preise</p>
+                      <p className="text-sm text-muted-foreground">
+                        {article.price_count} {article.price_count === 1 ? 'Preis' : 'Preise'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-3">
-                <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Letzte Änderung</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDateTime(article.updated_at)}
-                  </p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-3">
-                <Package className="h-4 w-4 mt-1 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Verknüpfte Preise</p>
-                  <p className="text-sm text-muted-foreground">
-                    {article.price_count} {article.price_count === 1 ? 'Preis' : 'Preise'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Description & Notes */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Description */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Beschreibung
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {article.description ? (
-              <p className="text-sm whitespace-pre-wrap">{article.description}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">Keine Beschreibung vorhanden</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Notes */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <StickyNote className="h-5 w-5" />
-              Notizen
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {article.notes ? (
-              <p className="text-sm whitespace-pre-wrap">{article.notes}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">Keine Notizen vorhanden</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Price History Placeholder (for PROJ-9) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-muted-foreground">
-            <Package className="h-5 w-5" />
-            Preishistorie
-          </CardTitle>
-          <CardDescription>
-            Wird in einem zukünftigen Update implementiert (PROJ-9)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            <Package className="h-12 w-12 mb-4 opacity-50" />
-            <p>Preishistorie und Lieferantenvergleich werden hier angezeigt.</p>
-            <p className="text-sm mt-1">Diese Funktion ist noch nicht verfügbar.</p>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Description & Notes */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Description */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Beschreibung
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {article.description ? (
+                  <p className="text-sm whitespace-pre-wrap">{article.description}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Keine Beschreibung vorhanden</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Notes */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <StickyNote className="h-5 w-5" />
+                  Notizen
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {article.notes ? (
+                  <p className="text-sm whitespace-pre-wrap">{article.notes}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Keine Notizen vorhanden</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Price History Tab */}
+        <TabsContent value="prices">
+          <PriceHistoryTab articleId={id} />
+        </TabsContent>
+      </Tabs>
 
       {/* Back Link */}
       <div className="pt-4">
