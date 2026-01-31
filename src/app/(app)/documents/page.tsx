@@ -2,9 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, FileText, Filter, Sparkles, Loader2 } from 'lucide-react'
+import { Plus, Search, FileText, Filter, Sparkles, Loader2, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   Select,
   SelectContent,
@@ -101,6 +109,10 @@ export default function DocumentsPage() {
   const [currentExtraction, setCurrentExtraction] = useState<ExtractionResult | null>(null)
   const [isBatchExtracting, setIsBatchExtracting] = useState(false)
 
+  // PROJ-16: Auto-create articles setting (per-document override)
+  const [autoCreateArticles, setAutoCreateArticles] = useState<boolean>(false)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+
   // Debounce search
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -109,6 +121,24 @@ export default function DocumentsPage() {
     }, 300)
     return () => clearTimeout(timeout)
   }, [search])
+
+  // PROJ-16: Load user settings for auto-create articles default
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch('/api/settings/extraction')
+        if (response.ok) {
+          const data = await response.json()
+          setAutoCreateArticles(data.extraction_auto_create_articles || false)
+        }
+      } catch {
+        // Ignore errors, use default
+      } finally {
+        setSettingsLoaded(true)
+      }
+    }
+    loadSettings()
+  }, [])
 
   // Fetch suppliers for filter/upload dialogs
   const { data: suppliersData } = useQuery<SuppliersResponse>({
@@ -268,11 +298,13 @@ export default function DocumentsPage() {
     },
   })
 
-  // Extract mutation
+  // Extract mutation (PROJ-16: supports auto_create_articles override)
   const extractMutation = useMutation({
-    mutationFn: async (documentId: string): Promise<ExtractResponse> => {
+    mutationFn: async ({ documentId, autoCreate }: { documentId: string; autoCreate: boolean }): Promise<ExtractResponse> => {
       const response = await fetch(`/api/documents/${documentId}/extract`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_create_articles: autoCreate }),
       })
       const data = await response.json()
       if (!response.ok) {
@@ -280,7 +312,8 @@ export default function DocumentsPage() {
       }
       return data
     },
-    onSuccess: (data, documentId) => {
+    onSuccess: (data, variables) => {
+      const { documentId } = variables
       queryClient.invalidateQueries({ queryKey: ['documents'] })
 
       // Update extraction status
@@ -385,7 +418,7 @@ export default function DocumentsPage() {
 
   const handleExtract = async (document: DocumentWithSupplier) => {
     setExtractingDocumentId(document.id)
-    await extractMutation.mutateAsync(document.id)
+    await extractMutation.mutateAsync({ documentId: document.id, autoCreate: autoCreateArticles })
   }
 
   const handleViewExtraction = async (document: DocumentWithSupplier) => {
@@ -407,7 +440,8 @@ export default function DocumentsPage() {
   const handleRetryExtraction = async () => {
     if (selectedDocument) {
       setExtractionDialogOpen(false)
-      await handleExtract(selectedDocument)
+      setExtractingDocumentId(selectedDocument.id)
+      await extractMutation.mutateAsync({ documentId: selectedDocument.id, autoCreate: autoCreateArticles })
     }
   }
 
@@ -430,6 +464,7 @@ export default function DocumentsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           document_ids: pendingDocs.map((d) => d.id),
+          auto_create_articles: autoCreateArticles, // PROJ-16: Pass override to batch
         }),
       })
 
@@ -523,25 +558,56 @@ export default function DocumentsPage() {
             PDFs hochladen und verwalten (Rechnungen, Angebote).
           </p>
         </div>
-        <div className="flex gap-2">
-          {pendingCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={handleBatchExtract}
-              disabled={isBatchExtracting}
-            >
-              {isBatchExtracting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Alle extrahieren ({pendingCount})
-            </Button>
+        <div className="flex items-center gap-4">
+          {/* PROJ-16: Auto-create articles toggle */}
+          {settingsLoaded && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2 border rounded-md px-3 py-2 bg-muted/30">
+                    <Checkbox
+                      id="auto-create-articles"
+                      checked={autoCreateArticles}
+                      onCheckedChange={(checked) => setAutoCreateArticles(checked === true)}
+                    />
+                    <Label
+                      htmlFor="auto-create-articles"
+                      className="text-sm font-normal cursor-pointer whitespace-nowrap"
+                    >
+                      Auto-Artikel
+                    </Label>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p>
+                    Wenn aktiviert, werden bei der Extraktion automatisch neue Artikel
+                    für nicht zugeordnete Positionen angelegt.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
-          <Button onClick={handleUpload}>
-            <Plus className="mr-2 h-4 w-4" />
-            Hochladen
-          </Button>
+          <div className="flex gap-2">
+            {pendingCount > 0 && (
+              <Button
+                variant="outline"
+                onClick={handleBatchExtract}
+                disabled={isBatchExtracting}
+              >
+                {isBatchExtracting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-4 w-4" />
+                )}
+                Alle extrahieren ({pendingCount})
+              </Button>
+            )}
+            <Button onClick={handleUpload}>
+              <Plus className="mr-2 h-4 w-4" />
+              Hochladen
+            </Button>
+          </div>
         </div>
       </div>
 

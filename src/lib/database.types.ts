@@ -483,6 +483,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          id: string
+          user_id: string
+          extraction_auto_create_articles: boolean
+          match_threshold_auto: number
+          match_threshold_suggestion: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          extraction_auto_create_articles?: boolean
+          match_threshold_auto?: number
+          match_threshold_suggestion?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          extraction_auto_create_articles?: boolean
+          match_threshold_auto?: number
+          match_threshold_suggestion?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       units: {
         Row: {
           abbreviation: string | null

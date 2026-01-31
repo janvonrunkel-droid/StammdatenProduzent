@@ -52,6 +52,18 @@ export interface ExtractionPosition {
   confidence: number
   calculated?: boolean
   page?: number // Page number where this position was found (for PDF sync)
+  // Article matching fields (PROJ-16)
+  article_id?: string | null
+  article_match_score?: number
+  article_match_method?: 'article_number' | 'name_fuzzy' | 'none'
+  article_suggestion_id?: string | null
+  article_suggestion_score?: number | null
+  article_matched_name?: string | null
+  ambiguous_matches?: Array<{
+    article_id: string
+    article_name: string
+    score: number
+  }>
 }
 
 export interface ExtractionTotals {
@@ -74,6 +86,21 @@ export interface ExtractionRawData {
   page_count?: number
   error?: string
   message?: string
+  // Article matching statistics (PROJ-16)
+  article_match_stats?: {
+    total: number
+    matched: number
+    suggestions: number
+    unmatched: number
+    matchRate: number
+    byMethod: {
+      article_number: number
+      name_fuzzy: number
+      none: number
+    }
+  }
+  // Auto-created article IDs (PROJ-16)
+  auto_created_article_ids?: string[]
 }
 
 export interface ExtractionResult {

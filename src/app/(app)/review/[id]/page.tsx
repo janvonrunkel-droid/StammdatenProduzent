@@ -210,15 +210,22 @@ export default function ReviewEditorPage({ params }: PageProps) {
         document_type: initialType,
       })
 
-      // Convert positions to editable format with unit normalization
+      // Convert positions to editable format with unit normalization and article match data
       const editablePositions: EditablePosition[] = (rawData.positions || []).map((p, i) => ({
         ...p,
         id: `pos-${i}-${Date.now()}`,
-        article_id: null,
+        article_id: p.article_id || null, // Preserve auto-matched article_id (PROJ-16)
         is_deleted: false,
         is_new: false,
         original_unit: p.unit, // Store original unit for display
         unit: normalizeUnit(p.unit) || p.unit, // Normalize unit
+        // Article match fields (PROJ-16)
+        article_match_score: p.article_match_score,
+        article_match_method: p.article_match_method,
+        article_suggestion_id: p.article_suggestion_id,
+        article_suggestion_score: p.article_suggestion_score,
+        article_matched_name: p.article_matched_name,
+        ambiguous_matches: p.ambiguous_matches,
       }))
       setPositions(editablePositions)
       setOriginalPositions(JSON.parse(JSON.stringify(editablePositions))) // Deep copy for correction tracking
@@ -514,6 +521,25 @@ export default function ReviewEditorPage({ params }: PageProps) {
     }
   }
 
+  // Accept article suggestion (PROJ-16)
+  const handleAcceptSuggestion = (index: number, articleId: string) => {
+    setPositions((prev) =>
+      prev.map((p, i) =>
+        i === index
+          ? {
+              ...p,
+              article_id: articleId,
+              // Clear suggestion fields since it's now assigned
+              article_suggestion_id: null,
+              article_suggestion_score: null,
+            }
+          : p
+      )
+    )
+    setIsDirty(true)
+    toast.success('Vorschlag übernommen')
+  }
+
   const handleCreateAndAssignArticle = async (article: {
     name: string
     article_number: string | null
@@ -778,6 +804,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
                 onPositionAdd={handlePositionAdd}
                 onArticleAssign={handleArticleAssign}
                 onPositionClick={handlePositionClick}
+                onAcceptSuggestion={handleAcceptSuggestion}
               />
 
               {/* Totals from extraction */}

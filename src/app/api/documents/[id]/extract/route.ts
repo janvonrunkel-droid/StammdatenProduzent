@@ -46,6 +46,13 @@ import {
   shouldUseLLM,
 } from '@/lib/extraction/llm-fallback'
 import { matchSupplierCombined } from '@/lib/extraction/supplier-matcher'
+import {
+  matchAllPositions,
+  getMatchStatistics,
+  areAllPositionsMatched,
+  type ArticleWithSupplierPrices,
+  type ArticleMatchResult,
+} from '@/lib/extraction/article-matcher'
 import type { Json } from '@/lib/database.types'
 
 interface RouteParams {
@@ -115,6 +122,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { supabaseAdmin: supabase, user } = auth
 
   const { id: documentId } = await params
+
+  // Parse optional request body for auto_create_articles override (PROJ-16)
+  let autoCreateArticlesOverride: boolean | undefined
+  try {
+    const body = await request.json()
+    if (typeof body.auto_create_articles === 'boolean') {
+      autoCreateArticlesOverride = body.auto_create_articles
+    }
+  } catch {
+    // No body or invalid JSON - use default from settings
+  }
 
   try {
     // 1. Get document and verify ownership
@@ -294,37 +312,134 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 7. Calculate confidence score
+    // 7. Match articles against database (PROJ-16)
+    let articleMatchResults: ArticleMatchResult[] = []
+    let articleMatchStats = { matched: 0, suggestions: 0, unmatched: 0, total: 0, matchRate: 0 }
+
+    if (extractionResult.positions.length > 0) {
+      // Load articles with supplier price information for matching
+      const { data: articlesData } = await supabase
+        .from('articles')
+        .select(`
+          id,
+          name,
+          article_number,
+          unit_id,
+          prices!inner(supplier_id)
+        `)
+        .is('deleted_at', null)
+
+      // Also get articles without prices (they still need to be matchable)
+      const { data: articlesWithoutPrices } = await supabase
+        .from('articles')
+        .select('id, name, article_number, unit_id')
+        .is('deleted_at', null)
+
+      // Combine and deduplicate
+      const articlesMap = new Map<string, ArticleWithSupplierPrices>()
+
+      // First, add all articles
+      articlesWithoutPrices?.forEach((article) => {
+        articlesMap.set(article.id, {
+          id: article.id,
+          name: article.name,
+          article_number: article.article_number,
+          unit_id: article.unit_id,
+          has_supplier_prices: false,
+        })
+      })
+
+      // Then mark which ones have prices from the matched supplier
+      articlesData?.forEach((article) => {
+        const prices = article.prices as Array<{ supplier_id: string }> | null
+        const hasSupplierPrices = matchedSupplierId
+          ? prices?.some((p) => p.supplier_id === matchedSupplierId) ?? false
+          : false
+
+        articlesMap.set(article.id, {
+          id: article.id,
+          name: article.name,
+          article_number: article.article_number,
+          unit_id: article.unit_id,
+          has_supplier_prices: hasSupplierPrices,
+        })
+      })
+
+      const articles = Array.from(articlesMap.values())
+
+      if (articles.length > 0) {
+        // Perform article matching
+        articleMatchResults = matchAllPositions(
+          extractionResult.positions.map((p) => ({
+            article_name: p.article_name,
+            article_number: p.article_number,
+            unit: p.unit,
+          })),
+          articles,
+          matchedSupplierId
+        )
+
+        articleMatchStats = getMatchStatistics(articleMatchResults)
+        console.log(`[Extract] Article matching: ${articleMatchStats.matched}/${articleMatchStats.total} matched, ${articleMatchStats.suggestions} suggestions`)
+      }
+    }
+
+    // 8. Calculate confidence score
     const confidenceScore = calculateConfidenceScore(extractionResult)
 
-    // 8. Determine extraction status
-    const extractionStatus = confidenceScore >= AUTO_APPROVE_THRESHOLD ? 'approved' : 'pending_review'
+    // 9. Determine extraction status
+    // For auto-approval, we also need all positions to have article matches
+    const allPositionsMatched = articleMatchResults.length > 0 ? areAllPositionsMatched(articleMatchResults) : false
+    const canAutoApprove = confidenceScore >= AUTO_APPROVE_THRESHOLD && allPositionsMatched
+    const extractionStatus = canAutoApprove ? 'approved' : 'pending_review'
 
-    // 9. Build raw_data for storage
+    // 10. Build raw_data for storage (with article match results)
     const rawData = {
       supplier_detected: extractionResult.supplier_detected,
       supplier_confidence: supplierMatchConfidence,
       supplier_matched_id: matchedSupplierId,
       document_date_detected: extractionResult.document_date_detected,
       document_number_detected: extractionResult.document_number_detected,
-      positions: extractionResult.positions.map(p => ({
-        line_number: p.line_number,
-        article_name: p.article_name,
-        article_number: p.article_number,
-        quantity: p.quantity,
-        unit: p.unit,
-        price_per_unit: p.price_per_unit,
-        total_price: p.total_price,
-        confidence: p.confidence,
-        calculated: p.calculated,
-      })),
+      // PROJ-16: Store auto_create_articles override for later use in approve
+      auto_create_articles_override: autoCreateArticlesOverride,
+      positions: extractionResult.positions.map((p, index) => {
+        const articleMatch = articleMatchResults[index] || {
+          article_id: null,
+          article_match_score: 0,
+          article_match_method: 'none',
+          article_suggestion_id: null,
+          article_suggestion_score: null,
+          article_matched_name: null,
+        }
+        return {
+          line_number: p.line_number,
+          article_name: p.article_name,
+          article_number: p.article_number,
+          quantity: p.quantity,
+          unit: p.unit,
+          price_per_unit: p.price_per_unit,
+          total_price: p.total_price,
+          confidence: p.confidence,
+          calculated: p.calculated,
+          // Article matching results (PROJ-16)
+          article_id: articleMatch.article_id,
+          article_match_score: articleMatch.article_match_score,
+          article_match_method: articleMatch.article_match_method,
+          article_suggestion_id: articleMatch.article_suggestion_id,
+          article_suggestion_score: articleMatch.article_suggestion_score,
+          article_matched_name: articleMatch.article_matched_name,
+          ambiguous_matches: articleMatch.ambiguous_matches,
+        }
+      }),
       totals: extractionResult.totals,
       extraction_method: usedLLM ? 'llm' : extractionResult.extraction_method,
       warnings: extractionResult.warnings,
       page_count: extractionResult.page_count,
+      // Article matching statistics (PROJ-16)
+      article_match_stats: articleMatchStats,
     }
 
-    // 10. Save extraction result
+    // 11. Save extraction result
     const { data: extraction, error: insertError } = await supabase
       .from('extractions')
       .upsert(
@@ -353,7 +468,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // 11. Update document status and metadata
+    // 12. Update document status and metadata
     const documentUpdate: Record<string, unknown> = {
       status: extractionStatus === 'approved' ? 'completed' : 'reviewed',
       processed_at: new Date().toISOString(),
@@ -376,7 +491,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .update(documentUpdate)
       .eq('id', documentId)
 
-    // 12. Return result
+    // 13. Return result
     return NextResponse.json({
       status: extractionStatus,
       extraction_id: extraction.id,
@@ -387,6 +502,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       supplier_matched: matchedSupplierId !== null,
       warnings: extractionResult.warnings,
       auto_approved: extractionStatus === 'approved',
+      // Article matching info (PROJ-16)
+      articles_matched: articleMatchStats.matched,
+      articles_suggestions: articleMatchStats.suggestions,
+      articles_unmatched: articleMatchStats.unmatched,
+      all_articles_matched: allPositionsMatched,
     })
   } catch (error) {
     console.error('Extraction error:', error)

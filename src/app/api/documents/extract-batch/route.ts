@@ -14,6 +14,13 @@ import {
   shouldUseLLM,
 } from '@/lib/extraction/llm-fallback'
 import { matchSupplierCombined } from '@/lib/extraction/supplier-matcher'
+import {
+  matchAllPositions,
+  getMatchStatistics,
+  areAllPositionsMatched,
+  type ArticleWithSupplierPrices,
+  type ArticleMatchResult,
+} from '@/lib/extraction/article-matcher'
 import type { Json } from '@/lib/database.types'
 
 // Maximum documents to process in one batch
@@ -83,7 +90,9 @@ async function processDocument(
   documentId: string,
   storagePath: string,
   supabase: ReturnType<typeof import('@/lib/supabase').createServiceClient>,
-  suppliers: Array<{ id: string; name: string; address: string | null; contact_email: string | null }>
+  suppliers: Array<{ id: string; name: string; address: string | null; contact_email: string | null }>,
+  articles: ArticleWithSupplierPrices[], // PROJ-16: Articles for matching
+  autoCreateArticlesOverride?: boolean // PROJ-16
 ): Promise<BatchResult> {
   try {
     // 1. Update document status to 'processing'
@@ -178,35 +187,87 @@ async function processDocument(
       }
     }
 
-    // 6. Calculate confidence and determine status
-    const confidenceScore = calculateConfidenceScore(extractionResult)
-    const extractionStatus = confidenceScore >= AUTO_APPROVE_THRESHOLD ? 'approved' : 'pending_review'
+    // 6. Match articles (PROJ-16)
+    let articleMatchResults: ArticleMatchResult[] = []
+    let articleMatchStats = { matched: 0, suggestions: 0, unmatched: 0, total: 0, matchRate: 0 }
 
-    // 7. Build raw_data
+    if (extractionResult.positions.length > 0 && articles.length > 0) {
+      // Mark articles that have prices from the matched supplier
+      const articlesWithSupplierInfo = articles.map((article) => ({
+        ...article,
+        has_supplier_prices: matchedSupplierId
+          ? article.has_supplier_prices
+          : false,
+      }))
+
+      // Perform article matching
+      articleMatchResults = matchAllPositions(
+        extractionResult.positions.map((p) => ({
+          article_name: p.article_name,
+          article_number: p.article_number,
+          unit: p.unit,
+        })),
+        articlesWithSupplierInfo,
+        matchedSupplierId
+      )
+
+      articleMatchStats = getMatchStatistics(articleMatchResults)
+    }
+
+    // 7. Calculate confidence and determine status
+    const confidenceScore = calculateConfidenceScore(extractionResult)
+    // For auto-approval, we also need all positions to have article matches (PROJ-16)
+    const allPositionsMatched = articleMatchResults.length > 0 ? areAllPositionsMatched(articleMatchResults) : false
+    const canAutoApprove = confidenceScore >= AUTO_APPROVE_THRESHOLD && allPositionsMatched
+    const extractionStatus = canAutoApprove ? 'approved' : 'pending_review'
+
+    // 8. Build raw_data with article match results (PROJ-16)
     const rawData = {
       supplier_detected: extractionResult.supplier_detected,
       supplier_confidence: supplierMatchConfidence,
       supplier_matched_id: matchedSupplierId,
       document_date_detected: extractionResult.document_date_detected,
       document_number_detected: extractionResult.document_number_detected,
-      positions: extractionResult.positions.map(p => ({
-        line_number: p.line_number,
-        article_name: p.article_name,
-        article_number: p.article_number,
-        quantity: p.quantity,
-        unit: p.unit,
-        price_per_unit: p.price_per_unit,
-        total_price: p.total_price,
-        confidence: p.confidence,
-        calculated: p.calculated,
-      })),
+      // PROJ-16: Store auto_create_articles override for later use in approve
+      auto_create_articles_override: autoCreateArticlesOverride,
+      positions: extractionResult.positions.map((p, index) => {
+        const articleMatch = articleMatchResults[index] || {
+          article_id: null,
+          article_match_score: 0,
+          article_match_method: 'none',
+          article_suggestion_id: null,
+          article_suggestion_score: null,
+          article_matched_name: null,
+        }
+        return {
+          line_number: p.line_number,
+          article_name: p.article_name,
+          article_number: p.article_number,
+          quantity: p.quantity,
+          unit: p.unit,
+          price_per_unit: p.price_per_unit,
+          total_price: p.total_price,
+          confidence: p.confidence,
+          calculated: p.calculated,
+          // Article matching results (PROJ-16)
+          article_id: articleMatch.article_id,
+          article_match_score: articleMatch.article_match_score,
+          article_match_method: articleMatch.article_match_method,
+          article_suggestion_id: articleMatch.article_suggestion_id,
+          article_suggestion_score: articleMatch.article_suggestion_score,
+          article_matched_name: articleMatch.article_matched_name,
+          ambiguous_matches: articleMatch.ambiguous_matches,
+        }
+      }),
       totals: extractionResult.totals,
       extraction_method: usedLLM ? 'llm' : extractionResult.extraction_method,
       warnings: extractionResult.warnings,
       page_count: extractionResult.page_count,
+      // Article matching statistics (PROJ-16)
+      article_match_stats: articleMatchStats,
     }
 
-    // 8. Save extraction
+    // 9. Save extraction
     const { data: extraction, error: insertError } = await supabase
       .from('extractions')
       .upsert(
@@ -235,7 +296,7 @@ async function processDocument(
       }
     }
 
-    // 9. Update document
+    // 10. Update document
     const documentUpdate: Record<string, unknown> = {
       status: extractionStatus === 'approved' ? 'completed' : 'reviewed',
       processed_at: new Date().toISOString(),
@@ -288,12 +349,16 @@ export async function POST(request: NextRequest) {
   }
   const { supabaseAdmin: supabase, user } = auth
 
-  // Parse optional body for document_ids filter
+  // Parse optional body for document_ids filter and auto_create_articles override (PROJ-16)
   let documentIds: string[] | undefined
+  let autoCreateArticlesOverride: boolean | undefined
   try {
     const body = await request.json()
     if (body.document_ids && Array.isArray(body.document_ids)) {
       documentIds = body.document_ids
+    }
+    if (typeof body.auto_create_articles === 'boolean') {
+      autoCreateArticlesOverride = body.auto_create_articles
     }
   } catch {
     // No body or invalid JSON - process all pending
@@ -334,6 +399,50 @@ export async function POST(request: NextRequest) {
     .select('id, name, address, contact_email')
     .is('deleted_at', null)
 
+  // PROJ-16: Get all articles for matching (with supplier price info)
+  const { data: articlesWithPrices } = await supabase
+    .from('articles')
+    .select(`
+      id,
+      name,
+      article_number,
+      unit_id,
+      prices!inner(supplier_id)
+    `)
+    .is('deleted_at', null)
+
+  const { data: articlesWithoutPrices } = await supabase
+    .from('articles')
+    .select('id, name, article_number, unit_id')
+    .is('deleted_at', null)
+
+  // Combine and prepare articles for matching
+  const articlesMap = new Map<string, ArticleWithSupplierPrices>()
+
+  // First, add all articles
+  articlesWithoutPrices?.forEach((article) => {
+    articlesMap.set(article.id, {
+      id: article.id,
+      name: article.name,
+      article_number: article.article_number,
+      unit_id: article.unit_id,
+      has_supplier_prices: false,
+    })
+  })
+
+  // Then mark which ones have prices
+  articlesWithPrices?.forEach((article) => {
+    articlesMap.set(article.id, {
+      id: article.id,
+      name: article.name,
+      article_number: article.article_number,
+      unit_id: article.unit_id,
+      has_supplier_prices: true,
+    })
+  })
+
+  const articles = Array.from(articlesMap.values())
+
   // Process documents sequentially (to avoid overloading)
   const results: BatchResult[] = []
 
@@ -342,7 +451,7 @@ export async function POST(request: NextRequest) {
       ? `${doc.id}.pdf`
       : doc.file_path
 
-    const result = await processDocument(doc.id, storagePath, supabase, suppliers || [])
+    const result = await processDocument(doc.id, storagePath, supabase, suppliers || [], articles, autoCreateArticlesOverride)
     results.push(result)
   }
 

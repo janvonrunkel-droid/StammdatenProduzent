@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Trash2, Link2, CheckCircle2, AlertCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, Link2, CheckCircle2, AlertCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Hash, Search, Sparkles } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -46,6 +46,104 @@ interface ReviewPositionsTableProps {
   onPositionAdd: () => void
   onArticleAssign: (index: number) => void
   onPositionClick?: (index: number, page?: number) => void // For PDF sync
+  onAcceptSuggestion?: (index: number, articleId: string) => void // Accept article suggestion (PROJ-16)
+}
+
+// Article Match Badge Component (PROJ-16)
+function ArticleMatchBadge({ position }: { position: EditablePosition }) {
+  const { article_match_score, article_match_method, article_id, article_suggestion_id, article_matched_name } = position
+
+  // If article is assigned (either auto-matched or manually)
+  if (article_id) {
+    const score = article_match_score ? Math.round(article_match_score * 100) : null
+
+    if (article_match_method === 'article_number') {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs gap-1">
+                <Hash className="h-3 w-3" />
+                {score}%
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Automatisch zugeordnet via Artikelnummer</p>
+              {article_matched_name && <p className="text-xs text-muted-foreground">{article_matched_name}</p>}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )
+    }
+
+    if (article_match_method === 'name_fuzzy' && score) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs gap-1">
+                <Search className="h-3 w-3" />
+                {score}%
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Automatisch zugeordnet via Name-Matching</p>
+              {article_matched_name && <p className="text-xs text-muted-foreground">{article_matched_name}</p>}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )
+    }
+
+    // Manually assigned
+    return null
+  }
+
+  // If there's a suggestion but no assignment
+  if (article_suggestion_id && position.article_suggestion_score) {
+    const score = Math.round(position.article_suggestion_score * 100)
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs gap-1">
+              <Sparkles className="h-3 w-3" />
+              {score}%
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Vorschlag gefunden ({score}% Match)</p>
+            {article_matched_name && <p className="text-xs text-muted-foreground">{article_matched_name}</p>}
+            {position.ambiguous_matches && position.ambiguous_matches.length > 1 && (
+              <p className="text-xs text-yellow-600">Mehrere ähnliche Artikel gefunden</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  // No match
+  if (article_match_method === 'none' || !article_match_score) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
+              Kein Match
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Kein passender Artikel gefunden</p>
+            <p className="text-xs text-muted-foreground">Bitte manuell zuordnen</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  return null
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
@@ -168,6 +266,7 @@ export function ReviewPositionsTable({
   onPositionAdd,
   onArticleAssign,
   onPositionClick,
+  onAcceptSuggestion,
 }: ReviewPositionsTableProps) {
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -248,8 +347,8 @@ export function ReviewPositionsTable({
                   <TableHead className="w-[100px]">Einheit</TableHead>
                   <TableHead className="w-[120px]">Einzelpreis</TableHead>
                   <TableHead className="w-[120px]">Gesamt</TableHead>
-                  <TableHead className="w-[80px]">Konfidenz</TableHead>
-                  <TableHead className="w-[100px] text-right">Aktionen</TableHead>
+                  <TableHead className="w-[180px]">Match</TableHead>
+                  <TableHead className="w-[120px] text-right">Aktionen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -352,10 +451,36 @@ export function ReviewPositionsTable({
                         })()}
                       </TableCell>
                       <TableCell>
-                        <ConfidenceBadge confidence={position.confidence} />
+                        <div className="flex items-center gap-2">
+                          <ConfidenceBadge confidence={position.confidence} />
+                          <ArticleMatchBadge position={position} />
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
+                          {/* Accept suggestion button (PROJ-16) */}
+                          {!position.article_id && position.article_suggestion_id && onAcceptSuggestion && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                                    onClick={() => onAcceptSuggestion(originalIndex, position.article_suggestion_id!)}
+                                  >
+                                    <Sparkles className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Vorschlag übernehmen</p>
+                                  {position.article_matched_name && (
+                                    <p className="text-xs text-muted-foreground">{position.article_matched_name}</p>
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>

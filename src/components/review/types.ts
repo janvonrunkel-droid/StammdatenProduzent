@@ -52,6 +52,17 @@ export interface EditablePosition extends ExtractionPosition {
   is_deleted?: boolean
   is_new?: boolean
   original_unit?: string | null // Original unit before normalization
+  // Article matching fields (PROJ-16)
+  article_match_score?: number
+  article_match_method?: 'article_number' | 'name_fuzzy' | 'none'
+  article_suggestion_id?: string | null
+  article_suggestion_score?: number | null
+  article_matched_name?: string | null
+  ambiguous_matches?: Array<{
+    article_id: string
+    article_name: string
+    score: number
+  }>
 }
 
 // Review state for the editor
