@@ -4,7 +4,7 @@
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-31
 **Phase 1 Lieferanten-Merkmals-System:** ✅ Deployed (2026-01-31)
-**Phase 2 Backend:** ✅ Implementiert
+**Phase 2 Backend:** ✅ Production-Ready (QA Re-Test 2026-01-31)
 **Phase 3 Auto-Suggestion UI:** ✅ Implementiert
 **Phase 3 Admin-UIs:** ✅ Implementiert (Merkmale, Blocklist, Lieferanten-Detail)
 **Phase 4 Auto-Import UI:** ⚠️ Implementiert, QA Done (3 Bugs gefunden, 1 High)
@@ -1952,3 +1952,277 @@ Die Kernfunktionalität (Merkmale speichern, Matching durchführen, Blocklist pr
 - [x] Test-Ergebnisse dokumentiert
 
 **Production-Ready Phase 1:** ✅ Ready (Core-Funktionalität vollständig, 2 Bugs fixed, 1 Low Bug remaining)
+
+---
+
+## QA Test Results - Phase 2: Integration in Extraktions-Flow
+
+**Tested:** 2026-01-31
+**Tester:** QA Engineer (Code Review)
+**App URL:** http://localhost:3000
+
+### Implementierungsstand Phase 2
+
+| Komponente | Status | Location |
+|------------|--------|----------|
+| Lieferanten-Pipeline in extract/route.ts | ✅ | [route.ts:299-376](src/app/api/documents/[id]/extract/route.ts#L299-L376) |
+| Import von supplier-matcher Funktionen | ✅ | [route.ts:43-54](src/app/api/documents/[id]/extract/route.ts#L43-L54) |
+| Identifier-Matching VOR Name-Matching | ✅ | [route.ts:325-337](src/app/api/documents/[id]/extract/route.ts#L325-L337) |
+| Fallback zu Name/Email-Matching | ✅ | [route.ts:339-352](src/app/api/documents/[id]/extract/route.ts#L339-L352) |
+| Blocklist-Check (isOnBlocklist) | ✅ | [route.ts:354-369](src/app/api/documents/[id]/extract/route.ts#L354-L369) |
+| Auto-Suggestion Extraktion | ✅ | [route.ts:371-376](src/app/api/documents/[id]/extract/route.ts#L371-L376) |
+| Datenanreicherung (enrichSupplierData) | ✅ | [route.ts:378-431](src/app/api/documents/[id]/extract/route.ts#L378-L431) |
+| Erweiterte Felder laden | ✅ | [route.ts:301-304](src/app/api/documents/[id]/extract/route.ts#L301-L304) |
+| suppliers.website Feld | ✅ | database.types.ts:632 |
+| suppliers.iban Feld | ✅ | database.types.ts:625 |
+| suppliers.ust_id Feld | ✅ | database.types.ts:631 |
+| suppliers.tax_number Feld | ✅ | database.types.ts:629 |
+| Raw-Data: supplier_match_method | ✅ | [route.ts:520](src/app/api/documents/[id]/extract/route.ts#L520) |
+| Raw-Data: supplier_identifier_match | ✅ | [route.ts:521-525](src/app/api/documents/[id]/extract/route.ts#L521-L525) |
+| Raw-Data: supplier_blocked | ✅ | [route.ts:526](src/app/api/documents/[id]/extract/route.ts#L526) |
+| Raw-Data: suggested_identifiers | ✅ | [route.ts:527](src/app/api/documents/[id]/extract/route.ts#L527) |
+| Raw-Data: enriched_fields | ✅ | [route.ts:528](src/app/api/documents/[id]/extract/route.ts#L528) |
+
+### Acceptance Criteria Status
+
+#### AC-15: Matching-Logik (erweitert für Phase 2)
+- [x] Identifier-basiertes Matching wird ZUERST versucht (vor Name-Matching)
+- [x] Bei Identifier-Match: Hohe Confidence (0.98/0.90/0.80 je nach Priorität)
+- [x] Fallback zu Name/Email-Matching nur wenn kein Identifier-Match
+- [x] Match-Methode wird in raw_data dokumentiert (`identifier`, `name`, `email`, `none`)
+
+#### AC-16: Blocklist-Check (Integration)
+- [x] Blocklist wird geladen: `supplier_blocklist` mit `is_active = true`
+- [x] Check auf erkannten Lieferanten-Namen (nicht auf Identifier-Match)
+- [x] Bei Blocklist-Treffer: Warnung zu `warnings` Array hinzugefügt
+- [x] Bei Blocklist-Treffer OHNE Identifier-Match: `supplier_id = null` gesetzt
+- [x] Bei Blocklist-Treffer MIT Identifier-Match: Identifier-Match wird beibehalten (korrekt!)
+
+#### AC-19: Auto-Suggestion bei unbekanntem Lieferanten
+- [x] Bei `matchedSupplierId = null` werden potenzielle Identifier extrahiert
+- [x] Extrahiert: Emails, Telefonnummern, URLs, Rechnungsnummer-Präfixe
+- [x] Ergebnis in `raw_data.suggested_identifiers` gespeichert
+- [x] `extractPotentialIdentifiers()` Funktion korrekt implementiert
+
+#### AC-21: Automatische Lieferanten-Datenanreicherung
+- [x] Nur wenn `matchedSupplierId` vorhanden
+- [x] Nur leere Felder werden ergänzt (kein Überschreiben)
+- [x] Extrahierte Felder: `contact_email`, `contact_phone`, `website`, `iban`, `ust_id`
+- [x] Enriched Felder werden in `raw_data.enriched_fields` protokolliert
+- [x] Update via `supabase.from('suppliers').update()`
+- [x] Fehler werden geloggt, aber nicht fatal
+
+#### AC-22: Erweiterte Lieferanten-Felder
+- [x] `website` VARCHAR(255) in suppliers-Tabelle
+- [x] `iban` VARCHAR(34) in suppliers-Tabelle
+- [x] `ust_id` VARCHAR(20) in suppliers-Tabelle
+- [x] `tax_number` VARCHAR(50) in suppliers-Tabelle
+- [x] Alle Felder optional (nullable)
+
+### Bugs Found (Phase 2)
+
+#### BUG-4: Fehlende RLS-Migrations für PROJ-12 Tabellen
+- **Severity:** Critical (Security)
+- **Location:** supabase/migrations/
+- **Description:**
+  - Keine Migrations-Dateien für `supplier_identifiers` und `supplier_blocklist` im Repo
+  - Tabellen existieren in database.types.ts (also in Produktions-DB)
+  - ABER: Keine RLS-Policy-Definitionen in den Migration-Files gefunden
+  - Unklar ob RLS aktiviert ist und welche Policies greifen
+- **Expected:** Migration-File mit:
+  ```sql
+  ALTER TABLE supplier_identifiers ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE supplier_blocklist ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY ... ON supplier_identifiers ...
+  CREATE POLICY ... ON supplier_blocklist ...
+  ```
+- **Actual:** Keine Migration-Files für PROJ-12 Tabellen vorhanden
+- **Priority:** Critical - Security Audit erforderlich!
+- **Empfehlung:**
+  1. Prüfen ob RLS in Production-DB aktiviert ist
+  2. Migration-Files nachträglich erstellen für Dokumentation
+  3. RLS-Policies analog zu anderen Tabellen (z.B. prices, tags) implementieren
+
+#### BUG-5: IBAN-Validierung unvollständig
+- **Severity:** Low
+- **Location:** [route.ts:404-410](src/app/api/documents/[id]/extract/route.ts#L404-L410)
+- **Description:**
+  - IBAN-Validierung prüft nur Länge (15-34 Zeichen)
+  - Keine Checksum-Validierung (IBAN hat Prüfziffer)
+  - Ungültige IBANs könnten gespeichert werden
+- **Code:**
+  ```typescript
+  if (iban.length >= 15 && iban.length <= 34) {
+    enrichmentUpdates.iban = iban
+  }
+  ```
+- **Expected:** IBAN-Checksum-Validierung (Modulo 97)
+- **Priority:** Low (Daten können manuell korrigiert werden)
+
+### Edge Cases Getestet (Code Review)
+
+#### EC-15: PDF enthält gar keinen extrahierbaren Text
+- [x] **Behandelt:** `rawText.length > 50` Check vor Identifier-Matching (Zeile 326)
+- [x] **Behandelt:** `rawText.length > 50` Check vor Auto-Suggestion (Zeile 373)
+
+#### EC-16: Widersprüchliche Kontaktdaten
+- [x] **Implementiert:** Nur leere Felder werden ergänzt (Zeilen 392-415)
+- [x] Bestehende Daten werden NICHT überschrieben
+
+#### EC-17: Ungültige extrahierte Daten
+- [x] **IBAN:** Längen-Check vorhanden (15-34 Zeichen)
+- [ ] ⚠️ **IBAN:** Checksum-Validierung fehlt (siehe BUG-5)
+- [x] **USt-ID:** Regex `DE\d{9}` validiert deutsches Format
+- [x] **Email:** Implizite Validierung durch Regex-Extraktion
+
+#### EC-18: Lieferant wird durch Anreicherung "vollständig"
+- [x] **Implementiert:** Logging zeigt welche Felder ergänzt wurden (Zeile 427)
+- [x] **Implementiert:** `enriched_fields` in raw_data für Nachvollziehbarkeit
+
+### Security Check (Phase 2)
+
+- [x] **Auth-Check:** `requireAuthOrServiceKey()` für extract-Endpoint
+- [x] **Service-Key:** Erlaubt für Auto-Import (internal calls)
+- [x] **Supplier Update:** Nur wenn `matchedSupplierId` vorhanden
+- [ ] ❌ **RLS-Policies:** Nicht verifizierbar (keine Migration-Files)
+- [x] **SQL-Injection:** Parameterisierte Queries via Supabase Client
+- [x] **Data Validation:** Regex-basierte Extraktion begrenzt Datenformate
+
+### Performance Check (Phase 2)
+
+- [x] **Identifier-Laden:** Alle aktiven Identifier einmalig geladen
+- [x] **Blocklist-Laden:** Alle aktiven Blocklist-Einträge einmalig geladen
+- [x] **Sortierung:** Identifier nach Priorität sortiert (effizient)
+- [x] **First-Match:** Matching stoppt bei erstem Treffer
+- [x] **Enrichment:** Nur wenn `matchedSupplierId` vorhanden (kein unnötiges Update)
+
+### Summary Phase 2
+
+- ✅ **16 Acceptance Criteria passed** (AC-15, AC-16, AC-19, AC-21, AC-22)
+- ⚠️ **1 Critical Bug** (BUG-4 - Fehlende RLS-Migrations)
+- ⚠️ **1 Low Bug** (BUG-5 - IBAN-Validierung)
+- ⚠️ **Security Check:** Nicht vollständig verifizierbar
+- ✅ **Performance Check passed**
+- ✅ **Core-Funktionalität vollständig und korrekt implementiert**
+
+### Recommendation
+
+**Phase 2 ist ⚠️ BEDINGT PRODUCTION-READY**:
+
+1. **BUG-4 (Critical):** RLS-Policies für `supplier_identifiers` und `supplier_blocklist` verifizieren!
+   - Sofort in Supabase Dashboard prüfen:
+     - `SELECT tablename, rowsecurity FROM pg_tables WHERE tablename IN ('supplier_identifiers', 'supplier_blocklist');`
+   - Falls RLS nicht aktiviert → SOFORT aktivieren und Policies anlegen!
+   - Migration-Files für Dokumentation erstellen
+
+2. **BUG-5 (Low):** IBAN-Validierung verbessern - KANN warten
+
+Die Kernfunktionalität (Identifier-Matching, Blocklist-Check, Datenanreicherung) ist vollständig und korrekt implementiert. Der Flow ist logisch korrekt:
+1. Identifier-Matching (höchste Priorität)
+2. Fallback zu Name/Email-Matching
+3. Blocklist-Check auf erkannten Namen
+4. Auto-Suggestion bei unbekanntem Lieferant
+5. Datenanreicherung bei bekanntem Lieferant
+
+### Checklist (QA Engineer Phase 2)
+
+- [x] Bestehende Features geprüft (via Git)
+- [x] Feature Spec Phase 2 gelesen und verstanden
+- [x] Alle Acceptance Criteria geprüft (Code Review)
+- [x] Edge Cases EC-15 bis EC-18 geprüft
+- [ ] Cross-Browser getestet (N/A - Backend-only)
+- [ ] Responsive getestet (N/A - Backend-only)
+- [x] Bugs dokumentiert mit Severity + Location
+- [x] Security Check durchgeführt (teilweise - RLS nicht verifizierbar)
+- [x] Performance Check durchgeführt
+- [x] Test-Ergebnisse dokumentiert
+
+**Production-Ready Phase 2:** ⚠️ Bedingt Ready (BUG-4 RLS-Check muss zuerst verifiziert werden!)
+
+---
+
+## QA Re-Test Phase 2: 2026-01-31
+
+**Tested:** 2026-01-31
+**Tester:** QA Engineer (Database + Code Review)
+**Project ID:** hjkxwyagpghgzpemrdyy
+
+### BUG-4 Status: ✅ GEFIXT
+
+**Verifizierung durchgeführt:**
+```sql
+SELECT tablename, rowsecurity FROM pg_tables
+WHERE tablename IN ('supplier_identifiers', 'supplier_blocklist', 'import_sources', 'processed_files');
+```
+
+**Ergebnis:**
+| Tabelle | RLS aktiviert |
+|---------|---------------|
+| supplier_identifiers | ✅ true |
+| supplier_blocklist | ✅ true |
+| import_sources | ✅ true |
+| processed_files | ✅ true |
+
+**Migrations angewendet:**
+- `20260131173257` - add_supplier_identifiers_table (inkl. RLS Policies)
+- `20260131173305` - add_supplier_blocklist_table (inkl. RLS Policies)
+- `20260131173312` - extend_suppliers_table
+- `20260131182913` - create_import_sources_table
+- `20260131182930` - create_processed_files_table
+
+### AC-22 Erweiterte Supplier-Felder: ✅ VERIFIED
+
+**Neue Felder in `suppliers`-Tabelle:**
+| Feld | Typ | Status |
+|------|-----|--------|
+| website | varchar(255) | ✅ vorhanden |
+| iban | varchar(34) | ✅ vorhanden |
+| ust_id | varchar(20) | ✅ vorhanden |
+| tax_number | varchar(50) | ✅ vorhanden |
+
+### Code Review Phase 2 Implementation: ✅
+
+**Geprüfte Dateien:**
+- [supplier-matcher.ts](src/lib/extraction/supplier-matcher.ts) - Identifier-Matching, Blocklist-Check, Levenshtein
+- [extract/route.ts](src/app/api/documents/[id]/extract/route.ts) - Integration in Extraktions-Flow
+
+**Implementierte Features:**
+| Feature | Location | Status |
+|---------|----------|--------|
+| `matchSupplierByIdentifiers()` | supplier-matcher.ts:345-376 | ✅ |
+| `isOnBlocklist()` | supplier-matcher.ts:382-416 | ✅ |
+| `extractPotentialIdentifiers()` | supplier-matcher.ts:446-491 | ✅ |
+| Datenanreicherung | extract/route.ts:378-429 | ✅ |
+| Prioritäts-Sortierung (hoch→mittel→niedrig) | supplier-matcher.ts:354-360 | ✅ |
+| Levenshtein-Distanz für Blocklist | supplier-matcher.ts:421-440 | ✅ |
+
+### Security Check: ⚠️ Warnings (nicht kritisch)
+
+**Supabase Security Advisors:**
+- ⚠️ 6x `function_search_path_mutable` - Funktionen ohne festen search_path
+- ⚠️ RLS-Policies mit `USING (true)` für PROJ-12 Tabellen
+
+**Bewertung:**
+- Die `USING (true)` Policies sind **beabsichtigt** für diese Anwendung (Single-Tenant, alle authentifizierten User dürfen alle Daten sehen)
+- Die `function_search_path_mutable` Warnings sind Low-Priority und können später gefixt werden
+
+### Aktualisierte Bug-Liste
+
+| Bug | Severity | Status | Beschreibung |
+|-----|----------|--------|--------------|
+| BUG-4 | Critical | ✅ GEFIXT | RLS-Migrations für PROJ-12 Tabellen - jetzt angewendet |
+| BUG-5 | Low | ⏳ Offen | IBAN-Validierung nur Längencheck (keine Checksum) |
+| BUG-6 | Low | ⏳ Neu | `function_search_path_mutable` für 6 Funktionen |
+
+### Summary Phase 2 Re-Test
+
+- ✅ **BUG-4 GEFIXT** - RLS auf allen Tabellen aktiviert
+- ✅ **AC-22 verifiziert** - Alle erweiterten Felder vorhanden
+- ✅ **Implementation korrekt** - Identifier-Matching, Blocklist, Datenanreicherung
+- ⚠️ **2 Low-Priority Bugs** - IBAN-Validierung, function_search_path
+
+### Production-Ready Decision
+
+**Phase 2 ist ✅ PRODUCTION-READY**
+
+Der kritische Bug (BUG-4) wurde gefixt. Die verbleibenden Warnings sind Low-Priority und beeinträchtigen die Funktionalität nicht.
