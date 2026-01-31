@@ -577,15 +577,18 @@ FRAGE: ${userMessage}
 
 Beantworte die Frage basierend NUR auf den obigen FAKTEN. Wenn keine passenden Daten gefunden wurden, sage das ehrlich.`
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ],
-    temperature: 0.3,
-    max_tokens: 1000,
-  })
+  const response = await openai.chat.completions.create(
+    {
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+    },
+    { timeout: 25000 } // 25 second timeout
+  )
 
   const content = response.choices[0]?.message?.content || 'Entschuldigung, ich konnte keine Antwort generieren.'
   const tokens_used = response.usage?.total_tokens || 0
@@ -656,10 +659,23 @@ export async function POST(request: NextRequest) {
       responseContent = result.content
       tokensUsed = result.tokens_used
     } catch (llmError) {
-      console.error('LLM Error:', llmError)
+      // Extract error details for debugging
+      const errorMessage = llmError instanceof Error ? llmError.message : String(llmError)
+      const errorName = llmError instanceof Error ? llmError.name : 'Unknown'
+      console.error('LLM Error:', {
+        name: errorName,
+        message: errorMessage,
+        contextLength: context.length,
+        messageLength: message.length,
+      })
+
       // Fallback: Return retrieved data in a structured format
       if (retrievedData.articles.length > 0 || retrievedData.prices.length > 0) {
-        responseContent = `Der KI-Assistent ist momentan nicht verfügbar. Hier sind die gefundenen Daten:\n\n${context}`
+        // Include more helpful error info for debugging
+        const debugInfo = process.env.NODE_ENV === 'development'
+          ? `\n\n_Debug: ${errorName} - ${errorMessage}_`
+          : ''
+        responseContent = `Der KI-Assistent ist momentan nicht verfügbar. Hier sind die gefundenen Daten:\n\n${context}${debugInfo}`
       } else {
         responseContent = 'Der KI-Assistent ist momentan nicht verfügbar und es wurden keine relevanten Daten gefunden. Bitte versuchen Sie es später erneut oder nutzen Sie die Artikel-Suche.'
       }
