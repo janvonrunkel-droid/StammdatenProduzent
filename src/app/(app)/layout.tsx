@@ -1,4 +1,5 @@
 import { AppHeader } from '@/components/app-header'
+import { ChatSidebar } from '@/components/chat'
 
 export default function AppLayout({
   children,
@@ -11,6 +12,7 @@ export default function AppLayout({
       <main className="flex-1">
         {children}
       </main>
+      <ChatSidebar />
     </div>
   )
 }

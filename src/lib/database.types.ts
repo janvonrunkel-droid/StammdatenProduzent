@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          title: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          id: string
+          session_id: string
+          role: "user" | "assistant" | "system"
+          content: string
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          role: "user" | "assistant" | "system"
+          content: string
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          role?: "user" | "assistant" | "system"
+          content?: string
+          metadata?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       article_tags: {
         Row: {
           article_id: string
@@ -57,6 +116,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           description: string | null
+          embedding: string | null
           id: string
           name: string
           notes: string | null
@@ -70,6 +130,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          embedding?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -83,6 +144,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          embedding?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -561,6 +623,38 @@ export type Database = {
           search_type: string
         }[]
       }
+      search_articles_semantic: {
+        Args: {
+          query_embedding: string
+          similarity_threshold?: number
+          max_results?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          article_number: string | null
+          description: string | null
+          similarity: number
+        }[]
+      }
+      search_articles_hybrid: {
+        Args: {
+          search_query: string
+          query_embedding?: string | null
+          keyword_weight?: number
+          semantic_weight?: number
+          max_results?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          article_number: string | null
+          description: string | null
+          keyword_score: number
+          semantic_score: number
+          combined_score: number
+        }[]
+      }
     }
     Enums: {
       audit_action: "insert" | "update" | "delete"
@@ -763,6 +857,14 @@ export type DuplicateExclusionUpdate = TablesUpdate<"duplicate_exclusions">
 export type SearchProfile = Tables<"search_profiles">
 export type SearchProfileInsert = TablesInsert<"search_profiles">
 export type SearchProfileUpdate = TablesUpdate<"search_profiles">
+
+export type ChatSession = Tables<"chat_sessions">
+export type ChatSessionInsert = TablesInsert<"chat_sessions">
+export type ChatSessionUpdate = TablesUpdate<"chat_sessions">
+
+export type ChatMessage = Tables<"chat_messages">
+export type ChatMessageInsert = TablesInsert<"chat_messages">
+export type ChatMessageUpdate = TablesUpdate<"chat_messages">
 
 // Enum types
 export type DocumentType = Enums<"document_type">
