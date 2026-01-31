@@ -1,10 +1,10 @@
 # PROJ-12: Auto-Import Pipeline
 
-**Status:** 🟡 In Progress (Phase 1 Deployed)
+**Status:** 🟡 In Progress (Phase 2 Deployed)
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-31
 **Phase 1 Lieferanten-Merkmals-System:** ✅ Deployed (2026-01-31)
-**Phase 2 Backend:** ✅ Production-Ready (QA Re-Test 2026-01-31)
+**Phase 2 Backend:** ✅ Deployed (2026-01-31)
 **Phase 3 Auto-Suggestion UI:** ✅ Implementiert
 **Phase 3 Admin-UIs:** ✅ Implementiert (Merkmale, Blocklist, Lieferanten-Detail)
 **Phase 4 Auto-Import UI:** ⚠️ Implementiert, QA Done (3 Bugs gefunden, 1 High)
