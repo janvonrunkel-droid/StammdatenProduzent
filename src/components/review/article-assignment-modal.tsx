@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Loader2, Plus, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, Loader2, Plus, CheckCircle2, AlertCircle, AlertTriangle, Euro, Info } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -80,8 +80,6 @@ export function ArticleAssignmentModal({
   onCreateAndAssign,
   onSkip,
 }: ArticleAssignmentModalProps) {
-  const queryClient = useQueryClient()
-
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null)
@@ -313,6 +311,44 @@ export function ArticleAssignmentModal({
         ) : (
           /* Create New Article Form */
           <div className="space-y-4">
+            {/* Price Info from Position */}
+            {position && (position.price_per_unit || position.total_price) && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-800 mb-2">
+                  <Euro className="h-4 w-4" />
+                  <span className="font-medium text-sm">Preisinformationen aus Position</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  {position.quantity != null && (
+                    <div>
+                      <span className="text-blue-600">Menge:</span>
+                      <span className="ml-1 font-medium">{position.quantity}</span>
+                    </div>
+                  )}
+                  {position.price_per_unit != null && (
+                    <div>
+                      <span className="text-blue-600">Einzelpreis:</span>
+                      <span className="ml-1 font-medium font-mono">
+                        {position.price_per_unit.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                      </span>
+                    </div>
+                  )}
+                  {position.total_price != null && (
+                    <div>
+                      <span className="text-blue-600">Gesamt:</span>
+                      <span className="ml-1 font-medium font-mono">
+                        {position.total_price.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Diese Preise werden automatisch beim Übernehmen gespeichert
+                </p>
+              </div>
+            )}
+
             {/* Duplicate Warning */}
             {duplicateWarning.length > 0 && (
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
