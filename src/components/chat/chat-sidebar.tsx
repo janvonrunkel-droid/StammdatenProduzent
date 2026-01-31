@@ -79,13 +79,13 @@ export function ChatSidebar() {
   } = useChatContext()
 
   const { sendMessage } = useChat()
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    // Use scrollIntoView on the bottom marker element
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
   return (
@@ -136,7 +136,7 @@ export function ChatSidebar() {
             </SheetHeader>
 
             {/* Messages Area */}
-            <ScrollArea className="flex-1" ref={scrollRef}>
+            <ScrollArea className="flex-1" ref={scrollAreaRef}>
               {messages.length === 0 ? (
                 <ChatWelcome />
               ) : (
@@ -145,6 +145,8 @@ export function ChatSidebar() {
                     <ChatMessage key={message.id} message={message} />
                   ))}
                   {isLoading && <TypingIndicator />}
+                  {/* Invisible marker for auto-scroll */}
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </ScrollArea>

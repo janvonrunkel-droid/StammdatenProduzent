@@ -242,6 +242,81 @@ async function retrieveRelevantData(
   keywords: string[],
   intent: Intent
 ): Promise<RetrievedData> {
+  // Special handling for "list all articles" type queries
+  const isListAllQuery =
+    (intent.type === 'article_search' || intent.type === 'general_info') &&
+    intent.entities.article_names.length === 0 &&
+    (message.toLowerCase().includes('alle artikel') ||
+     message.toLowerCase().includes('welche artikel') ||
+     message.toLowerCase().includes('artikel haben wir') ||
+     message.toLowerCase().includes('artikelliste') ||
+     message.toLowerCase().includes('zeig mir') ||
+     message.toLowerCase().includes('übersicht'))
+
+  if (isListAllQuery) {
+    // Return all articles when user asks for a list
+    const { data: allArticles, error } = await supabase
+      .from('articles')
+      .select(`
+        id,
+        name,
+        article_number,
+        description,
+        units!inner(name)
+      `)
+      .is('deleted_at', null)
+      .order('name')
+      .limit(50)
+
+    if (error) {
+      console.error('Error fetching all articles:', error)
+      return { articles: [], prices: [], query_keywords: keywords, search_method: 'keyword' }
+    }
+
+    const articles = (allArticles || []).map(a => ({
+      id: a.id,
+      name: a.name,
+      article_number: a.article_number,
+      description: a.description,
+      unit_name: (a.units as { name: string })?.name || 'Stück',
+      keyword_score: 1,
+      semantic_score: 1,
+    }))
+
+    // Get prices for all articles
+    const articleIds = articles.map(a => a.id)
+    let prices: RetrievedPrice[] = []
+
+    if (articleIds.length > 0) {
+      const { data: pricesRaw } = await supabase
+        .from('prices')
+        .select(`
+          article_id,
+          price_per_unit,
+          price_date,
+          articles!inner(name),
+          suppliers!inner(name),
+          documents(document_number)
+        `)
+        .in('article_id', articleIds)
+        .eq('is_active', true)
+        .order('price_date', { ascending: false })
+        .limit(100)
+
+      prices = (pricesRaw || []).map((p: Record<string, unknown>) => ({
+        article_id: p.article_id as string,
+        article_name: (p.articles as { name: string })?.name || 'Unbekannt',
+        supplier_name: (p.suppliers as { name: string })?.name || 'Unbekannt',
+        price_per_unit: p.price_per_unit as number,
+        unit_abbreviation: 'Stk',
+        price_date: p.price_date as string,
+        document_number: (p.documents as { document_number: string | null })?.document_number || null,
+      }))
+    }
+
+    return { articles, prices, query_keywords: ['alle'], search_method: 'keyword' }
+  }
+
   // Generate query embedding for semantic search
   let queryEmbedding: number[] | null = null
   let searchMethod: 'hybrid' | 'keyword' | 'semantic' = 'hybrid'
