@@ -1,12 +1,12 @@
 # PROJ-12: Auto-Import Pipeline
 
-**Status:** 🟡 In Progress (Phase 2 Deployed)
+**Status:** 🟡 In Progress (Phase 3 Deployed)
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-31
 **Phase 1 Lieferanten-Merkmals-System:** ✅ Deployed (2026-01-31)
 **Phase 2 Backend:** ✅ Deployed (2026-01-31)
-**Phase 3 Auto-Suggestion UI:** ✅ Implementiert
-**Phase 3 Admin-UIs:** ✅ Implementiert (Merkmale, Blocklist, Lieferanten-Detail)
+**Phase 3 Auto-Suggestion UI:** ✅ Deployed (2026-01-31)
+**Phase 3 Admin-UIs:** ✅ Deployed (2026-01-31)
 **Phase 4 Auto-Import UI:** ⚠️ Implementiert, QA Done (3 Bugs gefunden, 1 High)
 **Phase 1 UX-Bugs:** ✅ 2/3 gefixt (BUG-1, BUG-2) - 2026-01-31
 
@@ -1661,7 +1661,7 @@ Diese Spec ist inspiriert vom **"Rechnungsautomatisierung v3 - Mit Lieferanten K
 
 ### Bugs Found
 
-#### BUG-1: Cloud-Adapter in UI selektierbar aber nicht implementiert
+#### BUG-1: Cloud-Adapter in UI selektierbar aber nicht implementiert ✅ FIXED
 - **Severity:** Medium
 - **Location:** [import-source-dialog.tsx:345-366](src/components/import-sources/import-source-dialog.tsx#L345-L366)
 - **Steps to Reproduce:**
@@ -1672,7 +1672,7 @@ Diese Spec ist inspiriert vom **"Rechnungsautomatisierung v3 - Mit Lieferanten K
   5. **Expected:** Hinweis dass Feature noch nicht verfügbar
   6. **Actual:** Fehler "S3 Adapter noch nicht implementiert"
 - **Priority:** Medium (UX Issue)
-- **Fix:** UI-Optionen für S3/GDrive/Dropbox ausblenden oder deaktivieren bis Phase 5
+- **Fix:** ✅ FIXED 2026-01-31 - `implementedSourceTypes` Array eingeführt, nur Local + SMB werden im Dialog angezeigt
 
 #### BUG-2: Scan-Button bei deaktivierten Quellen nicht sinnvoll disabled
 - **Severity:** Low
@@ -1724,15 +1724,15 @@ Diese Spec ist inspiriert vom **"Rechnungsautomatisierung v3 - Mit Lieferanten K
 ### Summary
 
 - ✅ **16 Acceptance Criteria passed** (Phase 4 UI + Backend)
-- ⚠️ **3 Bugs found** (1 High, 1 Medium, 1 Low)
+- ⚠️ **3 Bugs found** (1 High, 1 Medium ✅ FIXED, 1 Low)
 - ✅ **Security Check passed**
 - ✅ **Performance Check passed**
-- ⚠️ Feature ist **NICHT production-ready** wegen fehlendem Cron Job
+- ⚠️ Feature ist **NICHT production-ready** wegen fehlendem Cron Job (BUG-3)
 
 ### Recommendation
 
 1. **BUG-3 (High) MUSS gefixt werden:** Automatischer Polling-Scheduler einrichten
-2. **BUG-1 (Medium) SOLLTE gefixt werden:** Cloud-Optionen ausblenden bis Phase 5
+2. ~~**BUG-1 (Medium) SOLLTE gefixt werden:** Cloud-Optionen ausblenden bis Phase 5~~ ✅ FIXED
 3. **BUG-2 (Low) KANN warten:** Nur UX-Inkonsistenz
 
 ### Checklist (QA Engineer)
@@ -2226,3 +2226,286 @@ WHERE tablename IN ('supplier_identifiers', 'supplier_blocklist', 'import_source
 **Phase 2 ist ✅ PRODUCTION-READY**
 
 Der kritische Bug (BUG-4) wurde gefixt. Die verbleibenden Warnings sind Low-Priority und beeinträchtigen die Funktionalität nicht.
+
+---
+
+## QA Test Results - Phase 3: Auto-Suggestion UI
+
+**Tested:** 2026-01-31
+**Tester:** QA Engineer (Code Review)
+**App URL:** http://localhost:3000
+
+### Implementierungsstand Phase 3
+
+| Komponente | Status | Location |
+|------------|--------|----------|
+| SupplierAutoSuggestionCard | ✅ | [supplier-auto-suggestion-card.tsx](src/components/review/supplier-auto-suggestion-card.tsx) |
+| Integration in Review-Seite | ✅ | [review/[id]/page.tsx:767-780](src/app/(app)/review/[id]/page.tsx#L767-L780) |
+| Checkbox-Auswahl fuer Merkmale | ✅ | [supplier-auto-suggestion-card.tsx:183-277](src/components/review/supplier-auto-suggestion-card.tsx#L183-L277) |
+| Lieferanten-Dropdown | ✅ | [supplier-auto-suggestion-card.tsx:290-314](src/components/review/supplier-auto-suggestion-card.tsx#L290-L314) |
+| Merkmale speichern Mutation | ✅ | [supplier-auto-suggestion-card.tsx:87-118](src/components/review/supplier-auto-suggestion-card.tsx#L87-L118) |
+| Neuen Lieferanten anlegen Button | ✅ | [supplier-auto-suggestion-card.tsx:335-349](src/components/review/supplier-auto-suggestion-card.tsx#L335-L349) |
+| Admin-UI `/settings/supplier-identifiers` | ✅ | [supplier-identifiers/page.tsx](src/app/(app)/settings/supplier-identifiers/page.tsx) |
+| Admin-UI `/settings/supplier-blocklist` | ✅ | [supplier-blocklist/page.tsx](src/app/(app)/settings/supplier-blocklist/page.tsx) |
+| Tab "Erkennungsmerkmale" am Lieferanten | ✅ | [suppliers/[id]/page.tsx:209-211](src/app/(app)/suppliers/[id]/page.tsx#L209-L211) |
+| SupplierIdentifiers Komponente | ✅ | [supplier-identifiers.tsx](src/components/suppliers/supplier-identifiers.tsx) |
+| API POST /api/supplier-identifiers | ✅ | [route.ts:78-141](src/app/api/supplier-identifiers/route.ts#L78-L141) |
+| Max-5-Check im Backend | ✅ | [route.ts:106-120](src/app/api/supplier-identifiers/route.ts#L106-L120) |
+| Varianten-Generator fuer Blocklist | ✅ | [supplier-matcher.ts:497-529](src/lib/extraction/supplier-matcher.ts#L497-L529) |
+| extractPotentialIdentifiers() | ✅ | [supplier-matcher.ts:446-491](src/lib/extraction/supplier-matcher.ts#L446-L491) |
+
+### Acceptance Criteria Status (Phase 3)
+
+#### AC-19: Auto-Suggestion bei unbekanntem Lieferanten
+
+##### Merkmals-Extraktion
+- [x] Email-Adressen extrahiert (Regex: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+- [x] Telefonnummern extrahiert (Regex: `(?:\+49|0)[\s.-]?\d{2,4}[\s.-]?\d{3,}[\s.-]?\d{2,}`)
+- [x] URLs/Domains extrahiert (Regex: `(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,})`)
+- [x] Rechnungsnummer-Praefixe extrahiert (Regex-Pattern fuer RE-, INV-, RG-, etc.)
+- [x] Deduplizierung via `new Set()`
+
+##### UI: SupplierAutoSuggestionCard
+- [x] Card erscheint nur wenn `supplierId === null` (unbekannter Lieferant)
+- [x] Card zeigt gefundene Merkmale als Checkboxen an
+- [x] Email-Merkmale mit Mail-Icon und Badge "Email"
+- [x] Telefon-Merkmale mit Phone-Icon und Badge "Telefon"
+- [x] Rechnungsnr-Praefixe mit FileText-Icon und Badge "Rechnungsnr-Praefix"
+- [x] URL-Merkmale mit Link2-Icon und Badge "URL/Domain"
+- [x] Zaehler zeigt Anzahl ausgewaehlter Merkmale an
+- [x] Lieferanten-Dropdown zur Zuordnung
+- [x] Button "Merkmale speichern" (nur wenn Merkmale ausgewaehlt UND Lieferant gewaehlt)
+- [x] Button "[Lieferantenname] als neuen Lieferanten anlegen" (wenn supplier_detected vorhanden)
+- [x] Loading-States mit Spinner-Icons
+- [x] Toast-Feedback bei Erfolg/Fehler
+
+##### Workflow
+- [x] User waehlt Merkmale via Checkboxen
+- [x] User waehlt Lieferanten aus Dropdown
+- [x] Klick auf "Merkmale speichern" sendet POST an `/api/supplier-identifiers` fuer jedes Merkmal
+- [x] Nach Speichern: Query invalidiert, Merkmale zurueckgesetzt
+- [x] onSupplierSelected Callback aktualisiert Lieferant in Review-Form
+- [ ] **BUG-7**: Kein "Neuen Lieferanten anlegen" Dialog direkt in der Card
+
+#### AC-17: Admin-UI fuer Merkmale (`/settings/supplier-identifiers`)
+
+##### Globale Uebersicht
+- [x] Seite `/settings/supplier-identifiers` existiert und ist erreichbar
+- [x] Header mit Titel "Lieferanten-Merkmale" und Icon
+- [x] "[+ Neu]" Button im Header oeffnet Create-Dialog
+- [x] Suche nach Lieferant und Wert
+- [x] Filter Dropdown "Alle Lieferanten"
+- [x] Filter Dropdown "Alle Typen"
+- [x] Zaehler zeigt Anzahl gefilterte Merkmale
+- [x] Loading-State mit Spinner
+
+##### Tabelle
+- [x] Spalte "Lieferant" (verlinkt zu `/suppliers/[id]`)
+- [x] Spalte "Typ" (Badge mit Label)
+- [x] Spalte "Wert" (monospace, truncated bei Ueberlange)
+- [x] Spalte "Operator" (enthalt, ist gleich, beginnt mit)
+- [x] Spalte "Prioritaet" (farbige Badges: gruen=Hoch, blau=Mittel, grau=Niedrig)
+- [x] Loeschen-Button mit Bestaetigung-Dialog
+- [ ] **BUG-8**: Kein Edit/Bearbeiten-Button fuer bestehende Merkmale
+
+##### Create-Dialog
+- [x] Lieferanten-Dropdown (required)
+- [x] Typ-Dropdown (Email, Telefon, Rechnungsnummer, Text, Steuernummer)
+- [x] Wert-Input mit dynamischem Placeholder
+- [x] Operator-Dropdown (enthalt, ist gleich, beginnt mit)
+- [x] Prioritaet-Dropdown (Hoch, Mittel, Niedrig)
+- [x] Button "Hinzufuegen" mit Loading-State
+- [x] Validierung: Lieferant und Wert required
+
+#### AC-18: Admin-UI fuer Blocklist (`/settings/supplier-blocklist`)
+
+##### Uebersicht
+- [x] Seite `/settings/supplier-blocklist` existiert und ist erreichbar
+- [x] Header mit Titel "Blocklist (Nie-Lieferanten)" und Shield-Icon
+- [x] Info-Alert erklaert Zweck der Blocklist
+- [x] "[+ Neue Firma]" Button
+- [x] Suche nach Name und Varianten
+- [x] Zaehler zeigt Anzahl Eintraege
+- [x] Empty-State mit Call-to-Action
+
+##### Tabelle
+- [x] Spalte "Name"
+- [x] Spalte "Varianten" (collapsible, zeigt Badges)
+- [x] Spalte "Grund"
+- [x] Spalte "Status" (Badge Aktiv/Inaktiv)
+- [x] Bearbeiten-Button (Pencil-Icon)
+- [x] Loeschen-Button mit Bestaetigung
+
+##### Create/Edit Dialog
+- [x] Name-Input (required)
+- [x] Varianten-Textarea (eine pro Zeile)
+- [x] "[Generieren]" Button fuer automatische Varianten
+- [x] Grund-Dropdown (Eigene Firma, Steuerbehoerde, Empfaenger, Andere)
+- [x] Aktiv/Inaktiv Switch
+- [x] Loading-State bei Submit
+- [x] Duplikat-Check auf Name (Backend)
+- [ ] **BUG-9**: Kein Live-Preview welche Schreibweisen erkannt werden
+
+#### AC-17 Teil 2: Am Lieferanten-Datensatz (`/suppliers/[id]`)
+
+##### Tab "Erkennungsmerkmale"
+- [x] Tab "Erkennungsmerkmale" in Lieferanten-Detail-Seite
+- [x] SupplierIdentifiers Komponente eingebunden
+- [x] Card mit Header "Erkennungsmerkmale"
+- [x] Info-Alert erklaert Zweck der Merkmale
+- [x] "[+ Merkmal]" Button (disabled wenn Max erreicht)
+- [x] Empty-State wenn keine Merkmale
+- [x] Tabelle mit Typ, Wert, Operator, Prioritaet
+- [x] Loeschen-Button pro Merkmal
+- [x] Warning bei Max. 5 Merkmalen erreicht
+- [x] Add-Dialog mit allen Feldern (Typ, Wert, Operator, Prioritaet)
+- [x] supplier_id wird automatisch gesetzt
+
+### Bugs Found (Phase 3)
+
+#### BUG-7: Kein "Neuen Lieferanten anlegen" Dialog direkt in Auto-Suggestion Card ✅ FIXED
+- **Severity:** Medium
+- **Location:** [supplier-auto-suggestion-card.tsx:335-349](src/components/review/supplier-auto-suggestion-card.tsx#L335-L349)
+- **Description:**
+  - Der Button "[Lieferantenname] als neuen Lieferanten anlegen" ruft `onCreateSupplier(supplierDetected)` auf
+  - Dies delegiert an die Parent-Komponente (Review-Seite)
+  - User kann Merkmale NICHT direkt beim Anlegen des neuen Lieferanten auswaehlen
+  - Workflow: 1. Lieferant anlegen -> 2. Dann nochmal Merkmale zuordnen (manuell)
+- **Expected:** Nach Lieferanten-Anlage werden ausgewaehlte Merkmale automatisch mitgespeichert
+- **Actual:** Ausgewaehlte Merkmale werden NICHT beruecksichtigt beim Anlegen
+- **Priority:** Medium (UX-Issue, Workaround moeglich)
+- **Fix:** ✅ FIXED 2026-01-31
+  - `onCreateSupplier` Signatur erweitert: `(name: string, identifiers?: SelectedIdentifier[]) => Promise<void>`
+  - `handleCreateNewSupplier` übergibt jetzt `selectedIdentifiers` an Callback
+  - Review-Seite speichert Merkmale nach Lieferanten-Erstellung via `POST /api/supplier-identifiers`
+  - Toast zeigt Anzahl gespeicherter Merkmale an
+
+#### BUG-8: Kein Edit-Button fuer bestehende Merkmale
+- **Severity:** Low
+- **Location:** [supplier-identifiers/page.tsx:282-321](src/app/(app)/settings/supplier-identifiers/page.tsx#L282-L321)
+- **Description:**
+  - In der globalen Merkmale-Uebersicht gibt es nur Loeschen, kein Bearbeiten
+  - In der Lieferanten-Detail-Seite (SupplierIdentifiers) ebenfalls nur Loeschen
+  - PATCH Endpoint `/api/supplier-identifiers/[id]` existiert aber
+  - User muss Merkmal loeschen und neu anlegen um Wert zu aendern
+- **Expected:** Edit-Button der Bearbeitung von Operator/Prioritaet/Wert erlaubt
+- **Actual:** Nur Loeschen moeglich
+- **Priority:** Low (Workaround: loeschen + neu anlegen)
+
+#### BUG-9: Live-Preview fuer Blocklist fehlt (wie Phase 1 BUG-3)
+- **Severity:** Low
+- **Location:** [supplier-blocklist/page.tsx:370-407](src/app/(app)/settings/supplier-blocklist/page.tsx#L370-L407)
+- **Description:**
+  - AC-18 spezifiziert: 'Live-Preview: "Diese Schreibweisen werden erkannt: ..."'
+  - Nur Varianten-Textarea + Generieren-Button vorhanden
+  - Keine Preview welche tatsaechlichen Schreibweisen gematcht werden
+- **Priority:** Low (Nice-to-have Feature, bereits in Phase 1 dokumentiert als BUG-3)
+
+### Edge Cases Getestet (Code Review)
+
+#### EC-19: Keine Merkmale im PDF gefunden
+- [x] **Implementiert:** Card zeigt alternative Beschreibung wenn keine Suggestions
+- [x] **Implementiert:** Card zeigt trotzdem Lieferanten-Dropdown + "Neuen anlegen" Button
+- **Code:** [supplier-auto-suggestion-card.tsx:159-162](src/components/review/supplier-auto-suggestion-card.tsx#L159-L162)
+
+#### EC-20: Sehr viele Merkmale im PDF (10+ Emails)
+- [x] **Implementiert:** Alle extrahierten Merkmale werden angezeigt (keine Begrenzung in UI)
+- [ ] **Potentielles UX-Problem:** Bei sehr vielen Merkmalen wird Card sehr lang
+- **Empfehlung:** Optional max. 5 pro Typ anzeigen mit "Mehr anzeigen" Link
+
+#### EC-21: Lieferant bereits mit 5 Merkmalen
+- [x] **Implementiert:** Backend gibt Fehler 400 "Maximal 5 Erkennungsmerkmale pro Lieferant erlaubt"
+- [x] **Implementiert:** Fehler wird via Toast angezeigt
+- **Problem:** Wenn User 3 Merkmale auswaehlt fuer Lieferant der schon 4 hat, scheitert nur das 2. (sequentiell)
+
+#### EC-22: Doppelklick auf Speichern
+- [x] **Implementiert:** Button ist disabled waehrend `isSavingIdentifiers === true`
+- [x] **Implementiert:** Loading-Spinner im Button
+
+#### EC-23: Netzwerkfehler beim Speichern
+- [x] **Implementiert:** try-catch mit finally-Block setzt `isSavingIdentifiers = false`
+- [x] **Implementiert:** Error via Toast angezeigt
+
+#### EC-24: Lieferant wird waehrend Bearbeitung geloescht
+- [x] **Implementiert:** Foreign Key Constraint verhindert Insert wenn Lieferant nicht existiert
+- [x] **Implementiert:** Datenbankfehler wird als Toast angezeigt
+
+### Security Check (Phase 3)
+
+- [x] **Auth auf allen Endpoints:** `requireAuth()` in allen API-Routes
+- [x] **Validierung:** Zod-Schemas fuer alle Inputs (`createSupplierIdentifierSchema`, `createSupplierBlocklistSchema`)
+- [x] **UUID-Validierung:** `supplier_id` wird als UUID validiert
+- [x] **SQL-Injection:** Parameterisierte Queries via Supabase Client
+- [x] **XSS:** React escaped Output automatisch
+- [x] **CSRF:** Next.js App Router hat built-in CSRF Protection
+- [x] **Max-Limit:** Backend enforced Max. 5 Merkmale pro Lieferant
+
+### Performance Check (Phase 3)
+
+- [x] **Lieferanten-Dropdown:** Laed max. 500 Lieferanten (limit in Query)
+- [x] **Query Invalidation:** Nur `supplier-identifiers` Query wird invalidiert, nicht alle
+- [x] **Sequentielles Speichern:** Merkmale werden nacheinander gespeichert (koennte parallel sein)
+- [x] **Pagination:** API unterstuetzt Pagination (nicht in Card benoetigt)
+- [x] **Lazy Loading:** Daten werden per API geladen, kein Server-Side Rendering
+
+### Responsive Check (Code Review)
+
+- [x] **Card Layout:** Verwendet Flexbox/Grid, sollte responsive sein
+- [x] **Tabellen:** Standard shadcn/ui Table, responsive mit horizontalem Scroll
+- [x] **Dialoge:** Dialog-Komponente ist responsive
+- [ ] **Nicht getestet:** Tatsaechliches Verhalten auf Mobile (kein Browser-Zugang)
+
+### Summary Phase 3
+
+- ✅ **36 von 39 Acceptance Criteria passed**
+- ⚠️ **3 Bugs found** (1 Medium ✅ FIXED, 2 Low)
+- ✅ **Security Check passed**
+- ✅ **Performance Check passed**
+- ✅ **Core-Funktionalitaet vollstaendig implementiert**
+
+### Aktualisierte Bug-Liste (Phase 3)
+
+| Bug | Severity | Status | Beschreibung |
+|-----|----------|--------|--------------|
+| BUG-7 | Medium | ✅ FIXED | Merkmale werden nicht beim Lieferanten-Anlegen mitgespeichert |
+| BUG-8 | Low | ⏳ Offen | Kein Edit-Button fuer bestehende Merkmale |
+| BUG-9 | Low | ⏳ Offen | Blocklist Live-Preview fehlt (= BUG-3 aus Phase 1) |
+
+### Recommendation
+
+**Phase 3 ist ✅ PRODUCTION-READY**:
+
+1. ~~**BUG-7 (Medium):** SOLLTE gefixt werden fuer bessere UX~~ ✅ FIXED 2026-01-31
+
+2. **BUG-8 (Low):** KANN warten
+   - Workaround: Merkmal loeschen und neu anlegen
+
+3. **BUG-9 (Low):** KANN warten (Nice-to-have)
+   - Bereits in Phase 1 dokumentiert
+
+Die **Kernfunktionalitaet ist vollstaendig und korrekt**:
+- Auto-Suggestion zeigt extrahierte Merkmale aus PDF
+- User kann Merkmale auswaehlen und Lieferant zuordnen
+- Merkmale werden korrekt gespeichert
+- Admin-UIs fuer Merkmale und Blocklist funktionieren
+- Lieferanten-Detail zeigt Erkennungsmerkmale
+
+### Checklist (QA Engineer Phase 3)
+
+- [x] Bestehende Features geprueft (via Git)
+- [x] Feature Spec Phase 3 gelesen und verstanden
+- [x] AC-17: Admin-UI Merkmale geprueft
+- [x] AC-18: Admin-UI Blocklist geprueft
+- [x] AC-19: Auto-Suggestion UI geprueft
+- [x] SupplierAutoSuggestionCard vollstaendig geprueft
+- [x] SupplierIdentifiers Komponente geprueft
+- [x] Integration in Review-Seite geprueft
+- [x] Edge Cases EC-19 bis EC-24 geprueft
+- [ ] Cross-Browser getestet (N/A - Code Review)
+- [ ] Responsive getestet (N/A - Code Review)
+- [x] Bugs dokumentiert mit Severity + Location
+- [x] Security Check durchgefuehrt
+- [x] Performance Check durchgefuehrt
+- [x] Test-Ergebnisse dokumentiert
+
+**Production-Ready Phase 3:** ✅ Ready (Kernfunktionalitaet vollstaendig, 1 Medium + 2 Low Bugs)

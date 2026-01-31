@@ -29,7 +29,7 @@ interface SupplierOption {
   name: string
 }
 
-interface SelectedIdentifier {
+export interface SelectedIdentifier {
   type: 'email' | 'telefon' | 'rechnungsnummer' | 'text'
   value: string
 }
@@ -38,7 +38,7 @@ interface SupplierAutoSuggestionCardProps {
   suggestedIdentifiers: SuggestedIdentifiers | null | undefined
   suppliers: SupplierOption[]
   onSupplierSelected: (supplierId: string) => void
-  onCreateSupplier: (name: string) => Promise<void>
+  onCreateSupplier: (name: string, identifiers?: SelectedIdentifier[]) => Promise<void>
   isCreatingSupplier?: boolean
   supplierDetected?: string | null
 }
@@ -139,7 +139,10 @@ export function SupplierAutoSuggestionCard({
       toast.error('Kein Lieferantenname erkannt')
       return
     }
-    await onCreateSupplier(supplierDetected)
+    // Pass selected identifiers to be saved with the new supplier
+    await onCreateSupplier(supplierDetected, selectedIdentifiers.length > 0 ? selectedIdentifiers : undefined)
+    // Clear selected identifiers after successful creation
+    setSelectedIdentifiers([])
   }
 
   // Icon for identifier type

@@ -58,6 +58,7 @@ import {
   type ExtractionRawData,
   type UnitOption,
   type Correction,
+  type SelectedIdentifier,
   REJECT_REASONS,
   type RejectReason,
 } from '@/components/review'
@@ -564,8 +565,8 @@ export default function ReviewEditorPage({ params }: PageProps) {
     setAssigningPositionIndex(null)
   }
 
-  // Create a new supplier and auto-assign it
-  const handleCreateSupplier = async (name: string) => {
+  // Create a new supplier and auto-assign it, optionally with identifiers
+  const handleCreateSupplier = async (name: string, identifiers?: SelectedIdentifier[]) => {
     if (!name.trim()) return
 
     setIsCreatingSupplier(true)
@@ -583,15 +584,42 @@ export default function ReviewEditorPage({ params }: PageProps) {
 
       const newSupplier = await response.json()
 
-      // Refresh suppliers list
+      // Save identifiers for the new supplier (BUG-7 fix)
+      if (identifiers && identifiers.length > 0) {
+        const identifierPromises = identifiers.map((identifier) =>
+          fetch('/api/supplier-identifiers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              supplier_id: newSupplier.id,
+              identifier_type: identifier.type,
+              identifier_value: identifier.value,
+              operator: 'contains',
+              priority: 'mittel',
+            }),
+          })
+        )
+
+        const identifierResults = await Promise.allSettled(identifierPromises)
+        const failedCount = identifierResults.filter((r) => r.status === 'rejected').length
+        if (failedCount > 0) {
+          toast.warning(`${failedCount} Merkmal(e) konnten nicht gespeichert werden`)
+        }
+      }
+
+      // Refresh suppliers list and identifiers
       queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      queryClient.invalidateQueries({ queryKey: ['supplier-identifiers'] })
 
       // Auto-assign the new supplier
       trackMetadataCorrection('metadata.supplier_id', originalMetadata?.supplier_id, newSupplier.id)
       setSupplierId(newSupplier.id)
       setIsDirty(true)
 
-      toast.success(`Lieferant "${name}" erstellt und zugeordnet`)
+      const identifierMsg = identifiers && identifiers.length > 0
+        ? ` mit ${identifiers.length} Merkmal(en)`
+        : ''
+      toast.success(`Lieferant "${name}" erstellt${identifierMsg} und zugeordnet`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Fehler beim Erstellen')
     } finally {
