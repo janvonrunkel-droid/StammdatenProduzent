@@ -83,3 +83,46 @@ export async function requireAuth(): Promise<
 
   return { user, supabase, supabaseAdmin }
 }
+
+// Auth check for API routes that can also be called by service-to-service
+// Accepts either user authentication OR x-service-key header
+// Used by endpoints that need to be called from background jobs (like extract from auto-import)
+export async function requireAuthOrServiceKey(
+  request?: Request
+): Promise<
+  | {
+      user: { id: string; email?: string } | null // null for service key auth
+      supabase: Awaited<ReturnType<typeof createServerClient>> | null
+      supabaseAdmin: ReturnType<typeof createServiceClient>
+      isServiceCall: boolean
+      error?: never
+      response?: never
+    }
+  | { user?: never; supabase?: never; supabaseAdmin?: never; isServiceCall?: never; error: string; response: NextResponse }
+> {
+  // Check for service key header first (for internal service-to-service calls)
+  if (request) {
+    const serviceKeyHeader = request.headers.get('x-service-key')
+    if (serviceKeyHeader && supabaseServiceRoleKey && serviceKeyHeader === supabaseServiceRoleKey) {
+      const supabaseAdmin = createServiceClient()
+      return { user: null, supabase: null, supabaseAdmin, isServiceCall: true }
+    }
+  }
+
+  // Fall back to user authentication
+  const supabase = await createServerClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    return {
+      error: 'Nicht autorisiert',
+      response: NextResponse.json(
+        { error: 'Unauthorized', message: 'Authentifizierung erforderlich' },
+        { status: 401 }
+      ),
+    }
+  }
+
+  const supabaseAdmin = createServiceClient()
+  return { user, supabase, supabaseAdmin, isServiceCall: false }
+}

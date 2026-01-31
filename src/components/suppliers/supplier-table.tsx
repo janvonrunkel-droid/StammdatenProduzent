@@ -1,6 +1,7 @@
 'use client'
 
-import { Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { Pencil, Trash2, ChevronUp, ChevronDown, ExternalLink } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -118,7 +119,14 @@ export function SupplierTable({
         <TableBody>
           {suppliers.map((supplier) => (
             <TableRow key={supplier.id}>
-              <TableCell className="font-medium">{supplier.name}</TableCell>
+              <TableCell className="font-medium">
+                <Link
+                  href={`/suppliers/${supplier.id}`}
+                  className="hover:text-primary hover:underline"
+                >
+                  {supplier.name}
+                </Link>
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {extractCity(supplier.address)}
               </TableCell>

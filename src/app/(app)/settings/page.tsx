@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Settings, FileText, Loader2, CheckCircle2, Info } from 'lucide-react'
+import { Settings, FileText, Loader2, CheckCircle2, Info, Fingerprint, ShieldOff, ChevronRight, FolderInput } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -176,6 +177,82 @@ export default function SettingsPage() {
               Speichern
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Supplier Recognition Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Fingerprint className="h-5 w-5" />
+            Lieferanten-Erkennung
+          </CardTitle>
+          <CardDescription>
+            Einstellungen für die automatische Erkennung von Lieferanten in PDFs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Link
+            href="/settings/supplier-identifiers"
+            className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Fingerprint className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Lieferanten-Merkmale</p>
+                <p className="text-sm text-muted-foreground">
+                  Alle Erkennungsmerkmale verwalten
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </Link>
+
+          <Link
+            href="/settings/supplier-blocklist"
+            className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <ShieldOff className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Blocklist (Nie-Lieferanten)</p>
+                <p className="text-sm text-muted-foreground">
+                  Firmen, die nie als Lieferant erkannt werden
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </Link>
+        </CardContent>
+      </Card>
+
+      {/* Auto-Import Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FolderInput className="h-5 w-5" />
+            Auto-Import
+          </CardTitle>
+          <CardDescription>
+            Automatischer Import von PDFs aus überwachten Ordnern und Cloud-Speichern.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/settings/import-sources"
+            className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <FolderInput className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Import-Quellen verwalten</p>
+                <p className="text-sm text-muted-foreground">
+                  Ordner und Cloud-Speicher für automatischen Import konfigurieren
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </Link>
         </CardContent>
       </Card>
     </div>

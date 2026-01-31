@@ -53,6 +53,7 @@ import {
   ReviewMetadataForm,
   ReviewPositionsTable,
   ArticleAssignmentModal,
+  SupplierAutoSuggestionCard,
   type EditablePosition,
   type ExtractionRawData,
   type UnitOption,
@@ -760,6 +761,22 @@ export default function ReviewEditorPage({ params }: PageProps) {
                     ))}
                   </ul>
                 </div>
+              )}
+
+              {/* PROJ-12: Auto-Suggestion Card for unknown suppliers */}
+              {supplierId === null && (
+                <SupplierAutoSuggestionCard
+                  suggestedIdentifiers={rawData.suggested_identifiers}
+                  suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+                  supplierDetected={rawData.supplier_detected}
+                  onSupplierSelected={(id) => {
+                    trackMetadataCorrection('metadata.supplier_id', originalMetadata?.supplier_id, id)
+                    setSupplierId(id)
+                    setIsDirty(true)
+                  }}
+                  onCreateSupplier={handleCreateSupplier}
+                  isCreatingSupplier={isCreatingSupplier}
+                />
               )}
 
               {/* Metadata Form */}

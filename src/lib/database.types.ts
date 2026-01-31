@@ -423,6 +423,197 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_blocklist: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          name: string
+          reason: string | null
+          updated_at: string | null
+          variants: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          reason?: string | null
+          updated_at?: string | null
+          variants?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          reason?: string | null
+          updated_at?: string | null
+          variants?: string[] | null
+        }
+        Relationships: []
+      }
+      import_sources: {
+        Row: {
+          id: string
+          name: string
+          type: Database["public"]["Enums"]["import_source_type"]
+          config: Json
+          polling_interval_minutes: number
+          default_document_type: string
+          derive_supplier_from_folder: boolean
+          is_active: boolean
+          last_scan_at: string | null
+          next_scan_at: string | null
+          last_error: string | null
+          error_count: number
+          stats_total_processed: number
+          stats_total_errors: number
+          stats_total_duplicates: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          type?: Database["public"]["Enums"]["import_source_type"]
+          config?: Json
+          polling_interval_minutes?: number
+          default_document_type?: string
+          derive_supplier_from_folder?: boolean
+          is_active?: boolean
+          last_scan_at?: string | null
+          next_scan_at?: string | null
+          last_error?: string | null
+          error_count?: number
+          stats_total_processed?: number
+          stats_total_errors?: number
+          stats_total_duplicates?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          type?: Database["public"]["Enums"]["import_source_type"]
+          config?: Json
+          polling_interval_minutes?: number
+          default_document_type?: string
+          derive_supplier_from_folder?: boolean
+          is_active?: boolean
+          last_scan_at?: string | null
+          next_scan_at?: string | null
+          last_error?: string | null
+          error_count?: number
+          stats_total_processed?: number
+          stats_total_errors?: number
+          stats_total_duplicates?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      processed_files: {
+        Row: {
+          id: string
+          source_id: string
+          file_path: string
+          file_name: string
+          file_hash: string | null
+          file_size: number | null
+          document_id: string | null
+          status: Database["public"]["Enums"]["processed_file_status"]
+          error_message: string | null
+          moved_to: string | null
+          processed_at: string
+        }
+        Insert: {
+          id?: string
+          source_id: string
+          file_path: string
+          file_name: string
+          file_hash?: string | null
+          file_size?: number | null
+          document_id?: string | null
+          status?: Database["public"]["Enums"]["processed_file_status"]
+          error_message?: string | null
+          moved_to?: string | null
+          processed_at?: string
+        }
+        Update: {
+          id?: string
+          source_id?: string
+          file_path?: string
+          file_name?: string
+          file_hash?: string | null
+          file_size?: number | null
+          document_id?: string | null
+          status?: Database["public"]["Enums"]["processed_file_status"]
+          error_message?: string | null
+          moved_to?: string | null
+          processed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processed_files_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "import_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processed_files_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      supplier_identifiers: {
+        Row: {
+          created_at: string | null
+          id: string
+          identifier_type: string
+          identifier_value: string
+          is_active: boolean
+          operator: string
+          priority: string
+          supplier_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          identifier_type: string
+          identifier_value: string
+          is_active?: boolean
+          operator?: string
+          priority?: string
+          supplier_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          identifier_type?: string
+          identifier_value?: string
+          is_active?: boolean
+          operator?: string
+          priority?: string
+          supplier_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_identifiers_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -431,10 +622,14 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          iban: string | null
           id: string
           name: string
           notes: string | null
+          tax_number: string | null
           updated_at: string
+          ust_id: string | null
+          website: string | null
         }
         Insert: {
           address?: string | null
@@ -443,10 +638,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          iban?: string | null
           id?: string
           name: string
           notes?: string | null
+          tax_number?: string | null
           updated_at?: string
+          ust_id?: string | null
+          website?: string | null
         }
         Update: {
           address?: string | null
@@ -455,10 +654,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          iban?: string | null
           id?: string
           name?: string
           notes?: string | null
+          tax_number?: string | null
           updated_at?: string
+          ust_id?: string | null
+          website?: string | null
         }
         Relationships: []
       }
@@ -697,6 +900,8 @@ export type Database = {
       document_type: "invoice" | "quote" | "manual"
       extraction_status: "pending_review" | "approved" | "rejected"
       user_role: "admin" | "user" | "readonly"
+      import_source_type: "local" | "smb" | "s3" | "gdrive" | "dropbox"
+      processed_file_status: "processed" | "duplicate" | "error"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -835,6 +1040,8 @@ export const Constants = {
       document_type: ["invoice", "quote", "manual"],
       extraction_status: ["pending_review", "approved", "rejected"],
       user_role: ["admin", "user", "readonly"],
+      import_source_type: ["local", "smb", "s3", "gdrive", "dropbox"],
+      processed_file_status: ["processed", "duplicate", "error"],
     },
   },
 } as const
@@ -896,9 +1103,27 @@ export type ChatMessage = Tables<"chat_messages">
 export type ChatMessageInsert = TablesInsert<"chat_messages">
 export type ChatMessageUpdate = TablesUpdate<"chat_messages">
 
+export type SupplierIdentifier = Tables<"supplier_identifiers">
+export type SupplierIdentifierInsert = TablesInsert<"supplier_identifiers">
+export type SupplierIdentifierUpdate = TablesUpdate<"supplier_identifiers">
+
+export type SupplierBlocklist = Tables<"supplier_blocklist">
+export type SupplierBlocklistInsert = TablesInsert<"supplier_blocklist">
+export type SupplierBlocklistUpdate = TablesUpdate<"supplier_blocklist">
+
+export type ImportSource = Tables<"import_sources">
+export type ImportSourceInsert = TablesInsert<"import_sources">
+export type ImportSourceUpdate = TablesUpdate<"import_sources">
+
+export type ProcessedFile = Tables<"processed_files">
+export type ProcessedFileInsert = TablesInsert<"processed_files">
+export type ProcessedFileUpdate = TablesUpdate<"processed_files">
+
 // Enum types
 export type DocumentType = Enums<"document_type">
 export type DocumentStatus = Enums<"document_status">
 export type ExtractionStatus = Enums<"extraction_status">
 export type UserRole = Enums<"user_role">
 export type AuditAction = Enums<"audit_action">
+export type ImportSourceType = Enums<"import_source_type">
+export type ProcessedFileStatus = Enums<"processed_file_status">

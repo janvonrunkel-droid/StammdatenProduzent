@@ -27,6 +27,29 @@ export const createSupplierSchema = z.object({
     .max(2000, 'Notizen dürfen maximal 2000 Zeichen haben')
     .optional()
     .nullable(),
+  // PROJ-12: Extended supplier fields for data enrichment
+  website: z
+    .string()
+    .max(255, 'Website darf maximal 255 Zeichen haben')
+    .optional()
+    .nullable(),
+  iban: z
+    .string()
+    .max(34, 'IBAN darf maximal 34 Zeichen haben')
+    .regex(/^[A-Z]{2}\d{2}[\dA-Z]{10,30}$/, 'Ungültiges IBAN-Format')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  ust_id: z
+    .string()
+    .max(20, 'USt-IdNr. darf maximal 20 Zeichen haben')
+    .optional()
+    .nullable(),
+  tax_number: z
+    .string()
+    .max(50, 'Steuernummer darf maximal 50 Zeichen haben')
+    .optional()
+    .nullable(),
 })
 
 // Schema for updating a supplier (all fields optional)

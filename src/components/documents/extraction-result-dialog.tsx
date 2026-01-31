@@ -101,6 +101,21 @@ export interface ExtractionRawData {
   }
   // Auto-created article IDs (PROJ-16)
   auto_created_article_ids?: string[]
+  // PROJ-12: Extended supplier matching info
+  supplier_match_method?: 'identifier' | 'name' | 'email' | 'none'
+  supplier_identifier_match?: {
+    identifier_type: string
+    identifier_value: string
+    priority: 'hoch' | 'mittel' | 'niedrig'
+  } | null
+  supplier_blocked?: boolean
+  suggested_identifiers?: {
+    emails: string[]
+    phones: string[]
+    invoicePrefixes: string[]
+    urls: string[]
+  } | null
+  enriched_fields?: string[] | null
 }
 
 export interface ExtractionResult {

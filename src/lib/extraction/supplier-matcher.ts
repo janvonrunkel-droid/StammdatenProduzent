@@ -3,16 +3,27 @@
  *
  * Fuzzy matches detected supplier names from PDFs against the suppliers table.
  * Uses fuzzball for Levenshtein-based string matching.
+ *
+ * PROJ-12: Extended with identifier-based matching (email, phone, invoice prefix, etc.)
  */
 
 import { ratio, partial_ratio, token_set_ratio } from 'fuzzball'
-import type { Supplier } from '@/lib/database.types'
+import type { Supplier, SupplierIdentifier } from '@/lib/database.types'
 
 export interface SupplierMatch {
   supplier_id: string
   supplier_name: string
   confidence: number
-  match_type: 'exact' | 'fuzzy_name' | 'fuzzy_address' | 'email'
+  match_type: 'exact' | 'fuzzy_name' | 'fuzzy_address' | 'email' | 'identifier'
+}
+
+export interface IdentifierMatch {
+  supplier_id: string
+  supplier_name: string
+  identifier_id: string
+  identifier_type: string
+  identifier_value: string
+  priority: 'hoch' | 'mittel' | 'niedrig'
 }
 
 export interface MatchResult {
@@ -287,4 +298,232 @@ export function matchSupplierCombined(
   }
 
   return nameResult
+}
+
+// Priority order for identifier matching
+const PRIORITY_ORDER = { hoch: 1, mittel: 2, niedrig: 3 }
+
+/**
+ * Normalize text for matching
+ * - Lowercase
+ * - Normalize whitespace
+ * - Remove extra spaces
+ */
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Check if text matches an identifier based on the operator
+ */
+function matchesIdentifier(
+  text: string,
+  identifier: Pick<SupplierIdentifier, 'identifier_value' | 'operator'>
+): boolean {
+  const normalizedText = normalizeText(text)
+  const normalizedValue = normalizeText(identifier.identifier_value)
+
+  switch (identifier.operator) {
+    case 'equals':
+      return normalizedText === normalizedValue
+    case 'starts_with':
+      return normalizedText.startsWith(normalizedValue)
+    case 'contains':
+    default:
+      return normalizedText.includes(normalizedValue)
+  }
+}
+
+/**
+ * Match supplier by identifier-based rules (PROJ-12)
+ * Checks identifiers in priority order (hoch -> mittel -> niedrig)
+ * Returns first match found
+ */
+export function matchSupplierByIdentifiers(
+  pdfText: string,
+  identifiers: (SupplierIdentifier & { supplier?: { id: string; name: string } | null })[]
+): IdentifierMatch | null {
+  if (!pdfText || !identifiers || identifiers.length === 0) {
+    return null
+  }
+
+  // Sort identifiers by priority
+  const sortedIdentifiers = [...identifiers]
+    .filter(i => i.is_active)
+    .sort((a, b) => {
+      const priorityA = PRIORITY_ORDER[a.priority as keyof typeof PRIORITY_ORDER] || 2
+      const priorityB = PRIORITY_ORDER[b.priority as keyof typeof PRIORITY_ORDER] || 2
+      return priorityA - priorityB
+    })
+
+  for (const identifier of sortedIdentifiers) {
+    if (matchesIdentifier(pdfText, identifier)) {
+      return {
+        supplier_id: identifier.supplier_id,
+        supplier_name: identifier.supplier?.name || 'Unbekannt',
+        identifier_id: identifier.id,
+        identifier_type: identifier.identifier_type,
+        identifier_value: identifier.identifier_value,
+        priority: identifier.priority as 'hoch' | 'mittel' | 'niedrig',
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Check if a name matches any entry in the blocklist (PROJ-12)
+ * Uses fuzzy matching with Levenshtein distance
+ */
+export function isOnBlocklist(
+  name: string,
+  blocklist: { name: string; variants: string[] | null; is_active: boolean }[],
+  threshold: number = 3
+): boolean {
+  if (!name || !blocklist || blocklist.length === 0) {
+    return false
+  }
+
+  const normalizedName = normalizeCompanyName(name)
+
+  for (const entry of blocklist) {
+    if (!entry.is_active) continue
+
+    // Check main name
+    const normalizedBlocklistName = normalizeCompanyName(entry.name)
+    const distance = levenshteinDistance(normalizedName, normalizedBlocklistName)
+    if (distance <= threshold) {
+      return true
+    }
+
+    // Check variants
+    if (entry.variants) {
+      for (const variant of entry.variants) {
+        const normalizedVariant = normalizeCompanyName(variant)
+        const variantDistance = levenshteinDistance(normalizedName, normalizedVariant)
+        if (variantDistance <= threshold) {
+          return true
+        }
+      }
+    }
+  }
+
+  return false
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length
+  const n = str2.length
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0))
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1]
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+      }
+    }
+  }
+
+  return dp[m][n]
+}
+
+/**
+ * Extract potential identifier suggestions from PDF text (PROJ-12)
+ * Returns suggested values that could be used as identifiers for unknown suppliers
+ */
+export function extractPotentialIdentifiers(pdfText: string): {
+  emails: string[]
+  phones: string[]
+  invoicePrefixes: string[]
+  urls: string[]
+} {
+  const result = {
+    emails: [] as string[],
+    phones: [] as string[],
+    invoicePrefixes: [] as string[],
+    urls: [] as string[],
+  }
+
+  if (!pdfText) return result
+
+  // Extract emails
+  const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+  const emails = pdfText.match(emailPattern) || []
+  result.emails = [...new Set(emails)]
+
+  // Extract phone numbers (German format)
+  const phonePattern = /(?:\+49|0)[\s.-]?\d{2,4}[\s.-]?\d{3,}[\s.-]?\d{2,}/g
+  const phones = pdfText.match(phonePattern) || []
+  result.phones = [...new Set(phones.map(p => p.replace(/[\s.-]/g, '')))]
+
+  // Extract URLs/domains
+  const urlPattern = /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,})/g
+  const urls = pdfText.match(urlPattern) || []
+  result.urls = [...new Set(urls)]
+
+  // Extract invoice number prefixes (common patterns: RE-, INV-, RG-, etc.)
+  const invoicePatterns = [
+    /(?:Rechnungsnr\.?|Rechnung\s*(?:Nr\.?)?|Invoice\s*(?:No\.?)?|RE|RG|INV)[\s:.-]*([A-Z]{2,4}[-\s]?\d{0,2})/gi,
+  ]
+  for (const pattern of invoicePatterns) {
+    const matches = pdfText.matchAll(pattern)
+    for (const match of matches) {
+      if (match[1] && match[1].length >= 2) {
+        result.invoicePrefixes.push(match[1].trim())
+      }
+    }
+  }
+  result.invoicePrefixes = [...new Set(result.invoicePrefixes)]
+
+  return result
+}
+
+/**
+ * Generate blocklist name variants automatically
+ * Handles German umlauts, common abbreviations, etc.
+ */
+export function generateBlocklistVariants(name: string): string[] {
+  const variants: Set<string> = new Set()
+  const normalized = name.trim()
+
+  // Original
+  variants.add(normalized)
+
+  // Lowercase
+  variants.add(normalized.toLowerCase())
+
+  // Without company suffixes
+  const withoutSuffix = normalized.replace(/\s*(gmbh|ag|kg|e\.?k\.?|ohg|gbr|ug|mbh|co\.?\s*kg|inc\.?|ltd\.?)\s*$/gi, '').trim()
+  variants.add(withoutSuffix)
+  variants.add(withoutSuffix.toLowerCase())
+
+  // Replace German umlauts
+  const umlauts: Record<string, string> = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue' }
+  let withoutUmlauts = normalized
+  for (const [umlaut, replacement] of Object.entries(umlauts)) {
+    withoutUmlauts = withoutUmlauts.replace(new RegExp(umlaut, 'g'), replacement)
+  }
+  variants.add(withoutUmlauts)
+  variants.add(withoutUmlauts.toLowerCase())
+
+  // Without hyphens/dashes
+  variants.add(normalized.replace(/[-–—]/g, ' '))
+  variants.add(normalized.replace(/[-–—]/g, ''))
+
+  // Remove the original name from variants
+  variants.delete(name)
+
+  return [...variants].filter(v => v.length > 2)
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/supabase'
+import { requireAuthOrServiceKey } from '@/lib/supabase'
 import {
   extractFromPdf,
   isExtractionError,
@@ -45,7 +45,13 @@ import {
   convertLLMResult,
   shouldUseLLM,
 } from '@/lib/extraction/llm-fallback'
-import { matchSupplierCombined } from '@/lib/extraction/supplier-matcher'
+import {
+  matchSupplierCombined,
+  matchSupplierByIdentifiers,
+  isOnBlocklist,
+  extractPotentialIdentifiers,
+  type IdentifierMatch,
+} from '@/lib/extraction/supplier-matcher'
 import {
   matchAllPositions,
   getMatchStatistics,
@@ -114,12 +120,12 @@ function calculateConfidenceScore(result: ExtractionResult): number {
 
 // POST /api/documents/[id]/extract - Start extraction for a document
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  // Auth check
-  const auth = await requireAuth()
+  // Auth check - allow both user auth and service key (for auto-import)
+  const auth = await requireAuthOrServiceKey(request)
   if (auth.response) {
     return auth.response
   }
-  const { supabaseAdmin: supabase, user } = auth
+  const { supabaseAdmin: supabase, user, isServiceCall } = auth
 
   const { id: documentId } = await params
 
@@ -149,8 +155,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Authorization check
-    if (document.created_by && document.created_by !== user.id) {
+    // Authorization check (skip for service calls - auto-import documents may not have created_by)
+    if (!isServiceCall && document.created_by && user && document.created_by !== user.id) {
       return NextResponse.json(
         { error: 'Zugriff verweigert' },
         { status: 403 }
@@ -290,25 +296,137 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 6. Match supplier against database
+    // 6. Match supplier against database (PROJ-12: Identifier-based matching first)
+    // Load suppliers with extended fields for data enrichment
     const { data: suppliers } = await supabase
       .from('suppliers')
-      .select('id, name, address, contact_email')
+      .select('id, name, address, contact_email, contact_phone, website, iban, ust_id, tax_number')
       .is('deleted_at', null)
+
+    // Load supplier identifiers for priority-based matching
+    const { data: identifiers } = await supabase
+      .from('supplier_identifiers')
+      .select('*, supplier:suppliers(id, name)')
+      .eq('is_active', true)
+
+    // Load blocklist for filtering out own company / never-suppliers
+    const { data: blocklist } = await supabase
+      .from('supplier_blocklist')
+      .select('name, variants, is_active')
+      .eq('is_active', true)
 
     let matchedSupplierId: string | null = null
     let supplierMatchConfidence = 0
+    let supplierMatchMethod: 'identifier' | 'name' | 'email' | 'none' = 'none'
+    let identifierMatchResult: IdentifierMatch | null = null
 
-    if (suppliers && extractionResult.supplier_detected) {
+    const rawText = extractionResult.raw_text || ''
+
+    // 6a. PROJ-12: Try identifier-based matching FIRST (more reliable)
+    if (identifiers && identifiers.length > 0 && rawText.length > 50) {
+      identifierMatchResult = matchSupplierByIdentifiers(rawText, identifiers)
+
+      if (identifierMatchResult) {
+        matchedSupplierId = identifierMatchResult.supplier_id
+        // High confidence for identifier matches
+        supplierMatchConfidence = identifierMatchResult.priority === 'hoch' ? 0.98 :
+                                   identifierMatchResult.priority === 'mittel' ? 0.90 : 0.80
+        supplierMatchMethod = 'identifier'
+        console.log(`[Extract] Identifier match: ${identifierMatchResult.supplier_name} via ${identifierMatchResult.identifier_type}="${identifierMatchResult.identifier_value}"`)
+      }
+    }
+
+    // 6b. If no identifier match, try name/email-based matching (existing logic)
+    if (!matchedSupplierId && suppliers && extractionResult.supplier_detected) {
       const matchResult = matchSupplierCombined(
         extractionResult.supplier_detected,
-        extractionResult.raw_text || '',
+        rawText,
         suppliers
       )
 
       if (matchResult.best_match) {
         matchedSupplierId = matchResult.best_match.supplier_id
         supplierMatchConfidence = matchResult.best_match.confidence
+        supplierMatchMethod = matchResult.best_match.match_type === 'email' ? 'email' : 'name'
+      }
+    }
+
+    // 6c. PROJ-12: Blocklist check on detected supplier name (if no match found yet or LLM-detected)
+    let isSupplierBlocked = false
+    if (extractionResult.supplier_detected && blocklist && blocklist.length > 0) {
+      isSupplierBlocked = isOnBlocklist(extractionResult.supplier_detected, blocklist)
+      if (isSupplierBlocked) {
+        console.log(`[Extract] Supplier "${extractionResult.supplier_detected}" is on blocklist - setting to unknown`)
+        // If the detected supplier is blocked (e.g., own company), clear the match
+        if (!identifierMatchResult) {
+          // Only clear if we didn't have a reliable identifier match
+          matchedSupplierId = null
+          supplierMatchConfidence = 0
+          supplierMatchMethod = 'none'
+          extractionResult.warnings.push(`Lieferant "${extractionResult.supplier_detected}" steht auf der Blocklist und wurde ignoriert`)
+        }
+      }
+    }
+
+    // 6d. PROJ-12: Extract potential identifiers for auto-suggestion (when supplier unknown)
+    let suggestedIdentifiers: ReturnType<typeof extractPotentialIdentifiers> | null = null
+    if (!matchedSupplierId && rawText.length > 50) {
+      suggestedIdentifiers = extractPotentialIdentifiers(rawText)
+      console.log(`[Extract] No supplier match - extracted suggestions: ${suggestedIdentifiers.emails.length} emails, ${suggestedIdentifiers.phones.length} phones`)
+    }
+
+    // 6e. PROJ-12: Data enrichment - update supplier with missing contact info
+    let enrichedFields: string[] = []
+    if (matchedSupplierId && suppliers) {
+      const matchedSupplier = suppliers.find(s => s.id === matchedSupplierId)
+      if (matchedSupplier) {
+        const enrichmentUpdates: Record<string, string> = {}
+        const extracted = extractPotentialIdentifiers(rawText)
+
+        // Extract additional data via regex
+        const ibanMatch = rawText.match(/[A-Z]{2}\d{2}[\dA-Z]{10,30}/g)
+        const ustIdMatch = rawText.match(/DE\d{9}/g)
+        const websiteMatch = rawText.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)/g)
+
+        // Only fill empty fields
+        if (!matchedSupplier.contact_email && extracted.emails.length > 0) {
+          enrichmentUpdates.contact_email = extracted.emails[0]
+          enrichedFields.push('contact_email')
+        }
+        if (!matchedSupplier.contact_phone && extracted.phones.length > 0) {
+          enrichmentUpdates.contact_phone = extracted.phones[0]
+          enrichedFields.push('contact_phone')
+        }
+        if (!matchedSupplier.website && websiteMatch && websiteMatch.length > 0) {
+          enrichmentUpdates.website = websiteMatch[0]
+          enrichedFields.push('website')
+        }
+        if (!matchedSupplier.iban && ibanMatch && ibanMatch.length > 0) {
+          // Validate IBAN format (basic check)
+          const iban = ibanMatch[0].replace(/\s/g, '').toUpperCase()
+          if (iban.length >= 15 && iban.length <= 34) {
+            enrichmentUpdates.iban = iban
+            enrichedFields.push('iban')
+          }
+        }
+        if (!matchedSupplier.ust_id && ustIdMatch && ustIdMatch.length > 0) {
+          enrichmentUpdates.ust_id = ustIdMatch[0]
+          enrichedFields.push('ust_id')
+        }
+
+        // Apply enrichment updates if any
+        if (Object.keys(enrichmentUpdates).length > 0) {
+          const { error: enrichError } = await supabase
+            .from('suppliers')
+            .update(enrichmentUpdates)
+            .eq('id', matchedSupplierId)
+
+          if (enrichError) {
+            console.warn(`[Extract] Failed to enrich supplier data: ${enrichError.message}`)
+          } else {
+            console.log(`[Extract] Enriched supplier ${matchedSupplier.name} with: ${enrichedFields.join(', ')}`)
+          }
+        }
       }
     }
 
@@ -398,6 +516,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       supplier_detected: extractionResult.supplier_detected,
       supplier_confidence: supplierMatchConfidence,
       supplier_matched_id: matchedSupplierId,
+      // PROJ-12: Extended supplier matching info
+      supplier_match_method: supplierMatchMethod,
+      supplier_identifier_match: identifierMatchResult ? {
+        identifier_type: identifierMatchResult.identifier_type,
+        identifier_value: identifierMatchResult.identifier_value,
+        priority: identifierMatchResult.priority,
+      } : null,
+      supplier_blocked: isSupplierBlocked,
+      suggested_identifiers: suggestedIdentifiers,
+      enriched_fields: enrichedFields.length > 0 ? enrichedFields : null,
       document_date_detected: extractionResult.document_date_detected,
       document_number_detected: extractionResult.document_number_detected,
       // PROJ-16: Store auto_create_articles override for later use in approve
@@ -481,8 +609,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (extractionResult.document_number_detected && confidenceScore > 0.7) {
       documentUpdate.document_number = extractionResult.document_number_detected
     }
-    // Update supplier if matched with high confidence
-    if (matchedSupplierId && supplierMatchConfidence > 0.8) {
+    // Update supplier if matched (threshold lowered from 0.8 to 0.5 to fix bug where
+    // detected suppliers weren't transferred to document overview)
+    if (matchedSupplierId && supplierMatchConfidence >= 0.5) {
       documentUpdate.supplier_id = matchedSupplierId
     }
 
