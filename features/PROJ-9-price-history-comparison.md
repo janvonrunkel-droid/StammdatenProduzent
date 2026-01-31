@@ -1052,3 +1052,82 @@ Alle 8 Bugs wurden via Code-Review verifiziert:
 - Security Audit bestanden (keine Critical/High Issues)
 - Code-Qualität gut (TypeScript, proper error handling)
 - RLS-Policies schützen Daten-Isolation
+
+---
+
+## 🚀 Deployment (DevOps Engineer)
+
+**Deployed:** 2026-01-31
+**Production URL:** https://stammdaten-produzent.vercel.app
+
+### Pre-Deployment Checks
+- [x] Local build successful (`npm run build`)
+- [x] TypeScript compiled without errors
+- [x] All QA tests passed (8 bugs fixed)
+- [x] Security audit passed (keine Critical/High Issues)
+- [x] Feature spec dokumentiert
+
+### Git Commits
+| Commit | Hash | Beschreibung |
+|--------|------|--------------|
+| Feature | `34f410e` | `feat(PROJ-9): Price history & supplier comparison` |
+| Deploy | `ee64486` | `deploy(PROJ-9): Deploy Price History & Comparison to production` |
+
+### Vercel Deployment
+- **Status:** ● Ready
+- **Build Duration:** ~1 Minute
+- **Auto-Deploy:** Via GitHub Integration (push to main)
+- **Environment:** Production
+
+### Deployed Files (17 Dateien)
+**Neue API-Endpoints:**
+- `src/app/api/articles/[id]/prices/route.ts`
+- `src/app/api/articles/[id]/prices/export/route.ts`
+- `src/app/api/articles/[id]/supplier-ranking/route.ts`
+
+**Neue Components:**
+- `src/components/price-history/PriceHistoryTab.tsx`
+- `src/components/price-history/PriceStatsCards.tsx`
+- `src/components/price-history/PriceChart.tsx`
+- `src/components/price-history/SupplierRankingTable.tsx`
+- `src/components/price-history/PriceHistoryTable.tsx`
+- `src/components/price-history/TimeRangeSelector.tsx`
+- `src/components/price-history/types.ts`
+- `src/components/price-history/index.ts`
+- `src/components/ui/toggle-group.tsx`
+- `src/components/ui/toggle.tsx`
+
+**Geänderte Dateien:**
+- `src/app/(app)/articles/[id]/page.tsx` - Tabs-Navigation
+- `package.json` - Neue Dependencies (recharts, toggle-group)
+- `package-lock.json`
+
+### Neue Dependencies
+```json
+{
+  "@radix-ui/react-toggle": "^1.1.10",
+  "@radix-ui/react-toggle-group": "^1.1.11",
+  "recharts": "^3.7.0"
+}
+```
+
+### Rollback Instructions
+Falls Probleme auftreten:
+1. **Vercel Dashboard:** Deployments → Vorherige Version → "Promote to Production"
+2. **Oder via Git:**
+   ```bash
+   git revert ee64486 34f410e
+   git push origin main
+   ```
+
+### Post-Deployment Verification
+- [ ] Production URL erreichbar
+- [ ] Artikel-Detail-Seite lädt
+- [ ] Preishistorie-Tab funktioniert
+- [ ] Chart wird angezeigt
+- [ ] CSV-Export funktioniert
+- [ ] Keine Console Errors
+
+---
+
+**Deployment Sign-off:** ✅ Deployed to Production (2026-01-31)
