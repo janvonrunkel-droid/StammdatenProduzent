@@ -10,6 +10,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar } from '@/components/ui/calendar'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -90,6 +98,32 @@ export function ReviewMetadataForm({
     documentDate ? new Date(documentDate) : undefined
   )
 
+  // State for new supplier dialog
+  const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false)
+  const [newSupplierName, setNewSupplierName] = useState('')
+
+  // Open dialog to create a new supplier
+  const handleOpenNewSupplierDialog = () => {
+    // Pre-fill with detected supplier name if available
+    setNewSupplierName(supplierDetected || '')
+    setShowNewSupplierDialog(true)
+  }
+
+  // Submit new supplier creation
+  const handleCreateSupplierSubmit = () => {
+    if (onCreateSupplier && newSupplierName.trim()) {
+      onCreateSupplier(newSupplierName.trim())
+    }
+  }
+
+  // Close dialog when a supplier is successfully created and selected
+  useEffect(() => {
+    if (supplierId && showNewSupplierDialog) {
+      setShowNewSupplierDialog(false)
+      setNewSupplierName('')
+    }
+  }, [supplierId, showNewSupplierDialog])
+
   // Update local date when prop changes
   useEffect(() => {
     setDate(documentDate ? new Date(documentDate) : undefined)
@@ -138,11 +172,11 @@ export function ReviewMetadataForm({
                 ))}
               </SelectContent>
             </Select>
-            {onCreateSupplier && supplierDetected && !supplierId && (
+            {onCreateSupplier && (
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onCreateSupplier(supplierDetected)}
+                onClick={handleOpenNewSupplierDialog}
                 title="Neuen Lieferanten anlegen"
                 disabled={isCreatingSupplier}
               >
@@ -230,6 +264,56 @@ export function ReviewMetadataForm({
           </RadioGroup>
         </div>
       </div>
+
+      {/* New Supplier Dialog */}
+      <Dialog open={showNewSupplierDialog} onOpenChange={setShowNewSupplierDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Neuen Lieferanten anlegen</DialogTitle>
+            <DialogDescription>
+              Geben Sie den Namen des neuen Lieferanten ein.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="newSupplierName">Lieferantenname</Label>
+            <Input
+              id="newSupplierName"
+              value={newSupplierName}
+              onChange={(e) => setNewSupplierName(e.target.value)}
+              placeholder="z.B. ABC GmbH"
+              className="mt-2"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newSupplierName.trim()) {
+                  handleCreateSupplierSubmit()
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewSupplierDialog(false)}
+              disabled={isCreatingSupplier}
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleCreateSupplierSubmit}
+              disabled={!newSupplierName.trim() || isCreatingSupplier}
+            >
+              {isCreatingSupplier ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Erstellt...
+                </>
+              ) : (
+                'Erstellen'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
