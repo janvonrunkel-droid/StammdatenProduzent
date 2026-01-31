@@ -47,10 +47,10 @@ Extrahiere:
 2. Dokumentdatum (Format: YYYY-MM-DD)
 3. Dokumentnummer/Rechnungsnummer
 4. Alle Artikelpositionen mit:
-   - Artikelname/Bezeichnung
-   - Artikelnummer (falls vorhanden)
+   - Artikelname/Bezeichnung (NUR der Produktname, OHNE Artikelnummer, Menge, Preis!)
+   - Artikelnummer (WICHTIG: Suche nach Zahlenfolgen wie "3060400821", "Art.Nr. 12345", "Artikelnummer: XXX")
    - Menge (als Zahl)
-   - Einheit (z.B. Stk, m², m³, kg, t, l)
+   - Einheit (z.B. Stk, m², m³, kg, t, l, Sack, Palette)
    - Einzelpreis (als Zahl, ohne Währung)
    - Gesamtpreis (als Zahl, ohne Währung)
 5. Summen:
@@ -59,7 +59,16 @@ Extrahiere:
    - Steuerbetrag
    - Bruttobetrag/Gesamtsumme
 
-WICHTIG:
+WICHTIG ZUR ARTIKELNUMMER-ERKENNUNG:
+- Die Artikelnummer ist eine eindeutige Kennung des Produkts (z.B. "3060400821", "PS-2020", "12345-ABC")
+- Sie steht oft VOR dem Artikelnamen oder wird mit "Artikelnummer:", "Art.Nr.", "Art.-Nr." gekennzeichnet
+- Die Artikelnummer gehört NICHT in den article_name!
+- Beispiel: "Artikelnummer: 3060400821 Zement CEM I 32,5R" → article_number: "3060400821", article_name: "Zement CEM I 32,5R"
+- Beispiel: "1 3060400821 Portlandzement 12,00 Sack 4,28" → article_number: "3060400821", article_name: "Portlandzement"
+
+WICHTIG ZUR ARTIKEL-EXTRAKTION:
+- Der article_name soll NUR die Produktbeschreibung enthalten
+- Positionsnummern (1, 2, 3...), Mengen und Preise gehören NICHT in den article_name
 - Alle Zahlen ohne Tausendertrennzeichen und mit Punkt als Dezimaltrenner (z.B. 1234.56)
 - Wenn etwas nicht gefunden werden kann, verwende null
 - Gib NUR das JSON zurück, keine Erklärungen
@@ -71,8 +80,8 @@ Antworte im folgenden JSON-Format:
   "document_number": "string oder null",
   "positions": [
     {
-      "article_name": "string",
-      "article_number": "string oder null",
+      "article_name": "string (NUR Produktbeschreibung)",
+      "article_number": "string oder null (z.B. 3060400821)",
       "quantity": number oder null,
       "unit": "string oder null",
       "price_per_unit": number oder null,
