@@ -1,8 +1,9 @@
 # PROJ-16: Artikel-Auto-Matching bei PDF-Extraktion
 
-**Status:** 🟢 Implemented
+**Status:** ✅ Deployed (2026-01-31)
 **Erstellt:** 2026-01-31
 **Requirements Engineer:** Claude Opus 4.5
+**Production URL:** https://stammdaten-produzent.vercel.app
 
 ---
 
