@@ -1,6 +1,7 @@
 # PROJ-9: Preishistorie & Vergleich
 
-**Status:** ✅ MVP Done
+**Status:** ✅ Deployed (2026-01-31)
+**Production URL:** https://stammdaten-produzent.vercel.app
 **Erstellt:** 2026-01-29
 **Letztes Update:** 2026-01-31
 
