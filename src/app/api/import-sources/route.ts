@@ -7,6 +7,7 @@ import {
 } from '@/lib/validations/import-source'
 import type { ImportSourceTypeValue } from '@/lib/validations/import-source'
 import type { Json } from '@/lib/database.types'
+import { encryptConfigCredentials } from '@/lib/crypto/credentials'
 
 // GET /api/import-sources - List import sources with pagination and filters
 export async function GET(request: NextRequest) {
@@ -125,12 +126,17 @@ export async function POST(request: NextRequest) {
   const now = new Date()
   const nextScan = new Date(now.getTime() + input.polling_interval_minutes * 60 * 1000)
 
+  // Encrypt sensitive credentials before storage (BUG-12 fix)
+  const encryptedConfig = encryptConfigCredentials(
+    configValidation.data as Record<string, unknown>
+  )
+
   // Create import source
   const { data, error } = await supabase
     .from('import_sources')
     .insert({
       ...input,
-      config: configValidation.data as Json,
+      config: encryptedConfig as Json,
       next_scan_at: input.is_active ? nextScan.toISOString() : null,
     })
     .select()

@@ -4,6 +4,10 @@ import { z } from 'zod'
 export const importSourceTypes = ['local', 'smb', 's3', 'gdrive', 'dropbox'] as const
 export type ImportSourceTypeValue = typeof importSourceTypes[number]
 
+// Currently implemented source types (Phase 5: Cloud-Integration enabled)
+export const implementedSourceTypes = ['local', 'smb', 's3', 'gdrive', 'dropbox'] as const
+export type ImplementedSourceType = typeof implementedSourceTypes[number]
+
 // Allowed polling intervals (in minutes)
 export const pollingIntervals = [1, 5, 15, 60] as const
 export type PollingInterval = typeof pollingIntervals[number]

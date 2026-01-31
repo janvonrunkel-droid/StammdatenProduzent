@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.980.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -41,7 +42,9 @@
     "clsx": "^2.1.0",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "dropbox": "^10.34.0",
     "fuzzball": "^2.2.3",
+    "googleapis": "^171.0.0",
     "lucide-react": "^0.562.0",
     "next": "^16.1.1",
     "next-themes": "^0.4.6",

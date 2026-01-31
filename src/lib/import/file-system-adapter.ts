@@ -3,13 +3,19 @@
  *
  * Provides abstraction for accessing files from different sources:
  * - Local file system (local drives and UNC paths like \\server\share)
- * - Future: S3, Google Drive, Dropbox
+ * - Amazon S3 buckets
+ * - Google Drive folders (with OAuth)
+ * - Dropbox folders (with OAuth)
  */
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import type { ImportSource } from '@/lib/database.types'
-import type { LocalConfig, SmbConfig } from '@/lib/validations/import-source'
+import type { LocalConfig, SmbConfig, S3Config, GDriveConfig, DropboxConfig } from '@/lib/validations/import-source'
+import { S3FileSystemAdapter } from './adapters/s3-adapter'
+import { GoogleDriveFileSystemAdapter } from './adapters/gdrive-adapter'
+import { DropboxFileSystemAdapter } from './adapters/dropbox-adapter'
+import { decryptConfigCredentials } from '@/lib/crypto/credentials'
 
 export interface FileInfo {
   name: string
@@ -267,9 +273,12 @@ export class LocalFileSystemAdapter implements FileSystemAdapter {
 
 /**
  * Factory function to create the appropriate file system adapter
+ * Credentials are decrypted before passing to adapters (BUG-12 fix)
  */
 export function createFileSystemAdapter(source: ImportSource): FileSystemAdapter {
-  const config = source.config as Record<string, unknown>
+  // Decrypt credentials before passing to adapters
+  const rawConfig = source.config as Record<string, unknown>
+  const config = decryptConfigCredentials(rawConfig)
 
   switch (source.type) {
     case 'local':
@@ -280,18 +289,20 @@ export function createFileSystemAdapter(source: ImportSource): FileSystemAdapter
       return new LocalFileSystemAdapter(config as SmbConfig)
 
     case 's3':
-      // TODO: Implement S3 adapter in Phase 5
-      throw new Error('S3 Adapter noch nicht implementiert')
+      return new S3FileSystemAdapter(config as S3Config)
 
     case 'gdrive':
-      // TODO: Implement Google Drive adapter in Phase 5
-      throw new Error('Google Drive Adapter noch nicht implementiert')
+      return new GoogleDriveFileSystemAdapter(config as GDriveConfig, source.id)
 
     case 'dropbox':
-      // TODO: Implement Dropbox adapter in Phase 5
-      throw new Error('Dropbox Adapter noch nicht implementiert')
+      return new DropboxFileSystemAdapter(config as DropboxConfig, source.id)
 
     default:
       throw new Error(`Unbekannter Import-Quellen-Typ: ${source.type}`)
   }
 }
+
+// Re-export cloud adapters for OAuth flow access
+export { S3FileSystemAdapter } from './adapters/s3-adapter'
+export { GoogleDriveFileSystemAdapter } from './adapters/gdrive-adapter'
+export { DropboxFileSystemAdapter } from './adapters/dropbox-adapter'

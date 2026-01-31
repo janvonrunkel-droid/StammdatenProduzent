@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, CheckCircle2, XCircle, Folder, Server, Cloud } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Folder, Server, Cloud, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select'
 import {
   importSourceTypes,
+  implementedSourceTypes,
   importSourceTypeLabels,
   pollingIntervals,
   pollingIntervalLabels,
@@ -77,6 +78,7 @@ interface ImportSourceDialogProps {
   onSuccess: () => void
 }
 
+// Icons for all implemented source types (Phase 5: Cloud-Integration enabled)
 const sourceTypeIcons: Record<ImportSourceTypeValue, typeof Folder> = {
   local: Folder,
   smb: Server,
@@ -94,6 +96,8 @@ export function ImportSourceDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
+  const [isConnectingOAuth, setIsConnectingOAuth] = useState(false)
+  const [oauthConnected, setOAuthConnected] = useState(false)
 
   const isEdit = !!source
 
@@ -288,8 +292,27 @@ export function ImportSourceDialog({
         throw new Error(error.message || 'Fehler beim Speichern')
       }
 
+      const savedSource = await response.json()
       toast.success(isEdit ? 'Import-Quelle aktualisiert' : 'Import-Quelle erstellt')
       onSuccess()
+
+      // BUG-13 fix: For new cloud sources, automatically redirect to OAuth after creation
+      if (!isEdit && (data.type === 'gdrive' || data.type === 'dropbox')) {
+        const oauthEndpoint = data.type === 'gdrive' ? 'gdrive' : 'dropbox'
+        try {
+          const oauthRes = await fetch(`/api/auth/${oauthEndpoint}?source_id=${savedSource.id}`)
+          const oauthData = await oauthRes.json()
+          if (oauthData.auth_url) {
+            toast.info('Weiterleitung zur Authentifizierung...')
+            window.location.href = oauthData.auth_url
+            return // Don't close dialog, we're redirecting
+          }
+        } catch {
+          // OAuth redirect failed, just close the dialog
+          toast.info('Quelle erstellt. Bitte verbinden Sie den Cloud-Dienst in den Einstellungen.')
+        }
+      }
+
       onOpenChange(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Fehler beim Speichern')
@@ -342,8 +365,9 @@ export function ImportSourceDialog({
                       value={field.value}
                       className="grid grid-cols-2 gap-4"
                     >
-                      {importSourceTypes.map((type) => {
-                        const Icon = sourceTypeIcons[type]
+                      {/* BUG-1 Phase 4 fix: Only show implemented source types */}
+                      {implementedSourceTypes.map((type) => {
+                        const Icon = sourceTypeIcons[type] || Folder
                         return (
                           <div key={type}>
                             <RadioGroupItem
@@ -596,44 +620,144 @@ export function ImportSourceDialog({
               )}
 
               {selectedType === 'gdrive' && (
-                <FormField
-                  control={form.control}
-                  name="config_folder_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Folder ID *</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Die Folder-ID aus der Google Drive URL
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                <>
+                  <FormField
+                    control={form.control}
+                    name="config_folder_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Folder ID *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Die Folder-ID aus der Google Drive URL
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {isEdit && source && (
+                    <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/50">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Google Drive Verbindung</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(source.config as Record<string, unknown>)?.oauth_token
+                            ? 'Verbunden - Klicken Sie auf "Neu verbinden" um die Verbindung zu erneuern'
+                            : 'Nicht verbunden - Klicken Sie auf "Mit Google verbinden"'}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isConnectingOAuth}
+                        onClick={async () => {
+                          setIsConnectingOAuth(true)
+                          try {
+                            const res = await fetch(`/api/auth/gdrive?source_id=${source.id}`)
+                            const data = await res.json()
+                            if (data.auth_url) {
+                              window.location.href = data.auth_url
+                            } else {
+                              toast.error(data.error || 'Fehler beim Verbinden')
+                            }
+                          } catch {
+                            toast.error('Fehler beim Verbinden mit Google')
+                          } finally {
+                            setIsConnectingOAuth(false)
+                          }
+                        }}
+                      >
+                        {isConnectingOAuth ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                        )}
+                        {(source.config as Record<string, unknown>)?.oauth_token
+                          ? 'Neu verbinden'
+                          : 'Mit Google verbinden'}
+                      </Button>
+                    </div>
                   )}
-                />
+                  {!isEdit && (
+                    <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                      Nach dem Erstellen der Quelle können Sie die Google Drive Verbindung herstellen.
+                    </p>
+                  )}
+                </>
               )}
 
               {selectedType === 'dropbox' && (
-                <FormField
-                  control={form.control}
-                  name="config_folder_path"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Folder Path *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="/Rechnungen/Eingang" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Der Pfad zum Dropbox-Ordner
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                <>
+                  <FormField
+                    control={form.control}
+                    name="config_folder_path"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Folder Path *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="/Rechnungen/Eingang" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Der Pfad zum Dropbox-Ordner
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {isEdit && source && (
+                    <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/50">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Dropbox Verbindung</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(source.config as Record<string, unknown>)?.access_token
+                            ? 'Verbunden - Klicken Sie auf "Neu verbinden" um die Verbindung zu erneuern'
+                            : 'Nicht verbunden - Klicken Sie auf "Mit Dropbox verbinden"'}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isConnectingOAuth}
+                        onClick={async () => {
+                          setIsConnectingOAuth(true)
+                          try {
+                            const res = await fetch(`/api/auth/dropbox?source_id=${source.id}`)
+                            const data = await res.json()
+                            if (data.auth_url) {
+                              window.location.href = data.auth_url
+                            } else {
+                              toast.error(data.error || 'Fehler beim Verbinden')
+                            }
+                          } catch {
+                            toast.error('Fehler beim Verbinden mit Dropbox')
+                          } finally {
+                            setIsConnectingOAuth(false)
+                          }
+                        }}
+                      >
+                        {isConnectingOAuth ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                        )}
+                        {(source.config as Record<string, unknown>)?.access_token
+                          ? 'Neu verbinden'
+                          : 'Mit Dropbox verbinden'}
+                      </Button>
+                    </div>
                   )}
-                />
+                  {!isEdit && (
+                    <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+                      Nach dem Erstellen der Quelle können Sie die Dropbox Verbindung herstellen.
+                    </p>
+                  )}
+                </>
               )}
             </div>
 

@@ -178,11 +178,13 @@ export async function scanSource(sourceId: string): Promise<ScanResult> {
 
     return result
   } catch (error) {
-    // Update source with error
+    // Update source with error - also set next_scan_at to prevent infinite retry loop (BUG-4 fix)
+    const nextScanAt = new Date(Date.now() + source.polling_interval_minutes * 60 * 1000)
     await supabase
       .from('import_sources')
       .update({
         last_scan_at: new Date().toISOString(),
+        next_scan_at: nextScanAt.toISOString(),
         last_error: error instanceof Error ? error.message : 'Unbekannter Fehler',
         error_count: source.error_count + 1,
       })

@@ -5,6 +5,7 @@ import {
   validateConfigForType,
 } from '@/lib/validations/import-source'
 import type { ImportSourceTypeValue } from '@/lib/validations/import-source'
+import { encryptConfigCredentials } from '@/lib/crypto/credentials'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -130,7 +131,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       )
     }
-    updates.config = configValidation.data as Record<string, unknown>
+    // Encrypt sensitive credentials before storage (BUG-12 fix)
+    updates.config = encryptConfigCredentials(
+      configValidation.data as Record<string, unknown>
+    )
   }
 
   // Calculate new next_scan_at if interval or is_active changes
