@@ -5,11 +5,20 @@ import { createContext, useContext, useState, useCallback, ReactNode, Dispatch, 
 // ============================================================================
 // Types
 // ============================================================================
+// Action button type for chat responses
+export interface ChatAction {
+  label: string
+  icon: '📊' | '📈' | '🔍' | '📄' | '📋'
+  type: 'link'
+  url: string
+}
+
 export interface ChatMessage {
   id: string
   session_id: string
   role: 'user' | 'assistant'
   content: string
+  isStreaming?: boolean // Added for streaming support
   metadata?: {
     sources?: Array<{
       type: string
@@ -19,6 +28,7 @@ export interface ChatMessage {
       date: string
       document_number?: string | null
     }>
+    actions?: ChatAction[]
     keywords?: string[]
     articles_found?: number
     prices_found?: number
@@ -48,10 +58,15 @@ interface ChatContextType {
   messages: ChatMessage[]
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>
   addMessage: (message: ChatMessage) => void
+  updateMessage: (id: string, updates: Partial<ChatMessage>) => void
 
   // Loading State
   isLoading: boolean
   setIsLoading: (loading: boolean) => void
+
+  // Streaming State
+  isStreaming: boolean
+  setIsStreaming: (streaming: boolean) => void
 
   // Actions
   startNewChat: () => void
@@ -79,9 +94,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Loading State
   const [isLoading, setIsLoading] = useState(false)
 
+  // Streaming State
+  const [isStreaming, setIsStreaming] = useState(false)
+
   // Add a single message
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages(prev => [...prev, message])
+  }, [])
+
+  // Update an existing message (for streaming)
+  const updateMessage = useCallback((id: string, updates: Partial<ChatMessage>) => {
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === id ? { ...msg, ...updates } : msg
+      )
+    )
   }, [])
 
   // Start a new chat
@@ -103,8 +130,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         messages,
         setMessages,
         addMessage,
+        updateMessage,
         isLoading,
         setIsLoading,
+        isStreaming,
+        setIsStreaming,
         startNewChat,
       }}
     >

@@ -131,8 +131,11 @@ function createQueryBuilder<T>(
       // Apply ordering
       if (orderField) {
         result.sort((a, b) => {
-          const aVal = (a as Record<string, unknown>)[orderField!]
-          const bVal = (b as Record<string, unknown>)[orderField!]
+          const aVal = (a as Record<string, unknown>)[orderField!] as string | number | null
+          const bVal = (b as Record<string, unknown>)[orderField!] as string | number | null
+          if (aVal == null && bVal == null) return 0
+          if (aVal == null) return orderAsc ? -1 : 1
+          if (bVal == null) return orderAsc ? 1 : -1
           if (aVal < bVal) return orderAsc ? -1 : 1
           if (aVal > bVal) return orderAsc ? 1 : -1
           return 0

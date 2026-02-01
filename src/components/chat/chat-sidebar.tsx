@@ -75,6 +75,7 @@ export function ChatSidebar() {
     setShowHistory,
     messages,
     isLoading,
+    isStreaming,
     startNewChat,
   } = useChatContext()
 
@@ -144,7 +145,9 @@ export function ChatSidebar() {
                   {messages.map((message) => (
                     <ChatMessage key={message.id} message={message} />
                   ))}
-                  {isLoading && <TypingIndicator />}
+                  {/* Show typing indicator only while loading before streaming starts */}
+                  {isLoading && !isStreaming && messages.length > 0 &&
+                    !messages[messages.length - 1]?.isStreaming && <TypingIndicator />}
                   {/* Invisible marker for auto-scroll */}
                   <div ref={messagesEndRef} />
                 </div>

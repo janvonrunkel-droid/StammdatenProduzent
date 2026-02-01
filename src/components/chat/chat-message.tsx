@@ -5,10 +5,11 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Bot, User, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { ChatMessage as ChatMessageType } from './chat-context'
+import type { ChatMessage as ChatMessageType, ChatAction } from './chat-context'
 
 // ============================================================================
 // Props
@@ -111,6 +112,10 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
           >
             {message.content}
           </ReactMarkdown>
+          {/* Streaming cursor animation */}
+          {message.isStreaming && (
+            <span className="inline-block w-2 h-4 ml-0.5 bg-primary animate-pulse" />
+          )}
         </div>
 
         {/* Sources */}
@@ -130,7 +135,35 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
             </div>
           </div>
         )}
+
+        {/* Action Buttons */}
+        {!isUser && !message.isStreaming && message.metadata?.actions && message.metadata.actions.length > 0 && (
+          <div className="pt-3 flex flex-wrap gap-2">
+            {message.metadata.actions.map((action, index) => (
+              <ActionButton key={index} action={action} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
 })
+
+// ============================================================================
+// Action Button Component
+// ============================================================================
+function ActionButton({ action }: { action: ChatAction }) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-8 text-xs gap-1.5"
+      asChild
+    >
+      <Link href={action.url}>
+        <span>{action.icon}</span>
+        <span>{action.label}</span>
+      </Link>
+    </Button>
+  )
+}
