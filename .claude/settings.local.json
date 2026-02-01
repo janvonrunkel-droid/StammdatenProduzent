@@ -85,7 +85,9 @@
       "Bash(npx husky:*)",
       "Bash(npm run test:coverage:*)",
       "Bash(npm run test:e2e:*)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(echo:*)",
+      "Bash(git reset:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
