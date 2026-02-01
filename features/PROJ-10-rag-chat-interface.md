@@ -1,9 +1,9 @@
 # PROJ-10: RAG-Chat Interface
 
-**Status:** ✅ Deployed (Phase 1 & 2)
+**Status:** ✅ Deployed (Phase 1, 2 & 3)
 **Erstellt:** 2026-01-29
-**Letztes Update:** 2026-01-31
-**Deployed:** 2026-01-31
+**Letztes Update:** 2026-02-01
+**Deployed:** 2026-02-01
 **Production URL:** https://stammdaten-produzent.vercel.app
 
 ---
