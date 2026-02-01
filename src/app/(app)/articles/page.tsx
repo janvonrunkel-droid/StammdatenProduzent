@@ -41,10 +41,6 @@ interface ArticlesResponse {
   limit: number
 }
 
-interface DependencyError {
-  price_count: number
-}
-
 type SortField = 'name' | '-name' | 'article_number' | '-article_number' | 'updated_at' | '-updated_at' | 'price_asc' | 'price_desc'
 type ViewMode = 'table' | 'grid'
 
@@ -62,7 +58,6 @@ function ArticlesPageContent() {
   const [tagFormOpen, setTagFormOpen] = useState(false)
   const [unitFormOpen, setUnitFormOpen] = useState(false)
   const [selectedArticle, setSelectedArticle] = useState<ArticleWithRelations | null>(null)
-  const [dependencyError, setDependencyError] = useState<DependencyError | null>(null)
 
   // Sync search input with URL
   useEffect(() => {
@@ -195,10 +190,6 @@ function ArticlesPageContent() {
       })
       if (!response.ok) {
         const error = await response.json()
-        if (error.error === 'DependencyError') {
-          setDependencyError({ price_count: error.price_count })
-          throw new Error(error.message)
-        }
         throw new Error(error.message || 'Fehler beim Löschen')
       }
     },
@@ -206,13 +197,10 @@ function ArticlesPageContent() {
       queryClient.invalidateQueries({ queryKey: ['articles'] })
       setDeleteOpen(false)
       setSelectedArticle(null)
-      setDependencyError(null)
       toast.success('Artikel gelöscht')
     },
     onError: (error: Error) => {
-      if (!dependencyError) {
-        toast.error(error.message)
-      }
+      toast.error(error.message)
     },
   })
 
@@ -277,7 +265,6 @@ function ArticlesPageContent() {
 
   const handleDelete = (article: ArticleWithRelations) => {
     setSelectedArticle(article)
-    setDependencyError(null)
     setDeleteOpen(true)
   }
 
@@ -557,13 +544,11 @@ function ArticlesPageContent() {
           setDeleteOpen(open)
           if (!open) {
             setSelectedArticle(null)
-            setDependencyError(null)
           }
         }}
         article={selectedArticle}
         onConfirm={handleDeleteConfirm}
         isDeleting={deleteArticleMutation.isPending}
-        dependencyError={dependencyError}
       />
 
       <TagFormDialog

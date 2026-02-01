@@ -226,24 +226,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     )
   }
 
-  // Check for related prices
-  const { count: priceCount } = await supabase
+  // Delete related prices first (cascade delete)
+  await supabaseAdmin
     .from('prices')
-    .select('id', { count: 'exact', head: true })
+    .delete()
     .eq('article_id', id)
 
-  if ((priceCount || 0) > 0) {
-    return NextResponse.json(
-      {
-        error: 'DependencyError',
-        message: `Artikel hat noch ${priceCount} Preise. Bitte zuerst löschen.`,
-        price_count: priceCount || 0,
-      },
-      { status: 400 }
-    )
-  }
-
-  // Delete article_tags first (use admin client to bypass RLS)
+  // Delete article_tags (use admin client to bypass RLS)
   await supabaseAdmin
     .from('article_tags')
     .delete()
