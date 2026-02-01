@@ -430,6 +430,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // 6f. Apply confidence threshold for supplier assignment
+    // If match confidence is too low, don't auto-assign supplier - require manual review
+    const SUPPLIER_ASSIGNMENT_THRESHOLD = 0.75
+    if (matchedSupplierId && supplierMatchConfidence < SUPPLIER_ASSIGNMENT_THRESHOLD) {
+      console.log(`[Extract] Supplier match confidence (${Math.round(supplierMatchConfidence * 100)}%) below threshold (${SUPPLIER_ASSIGNMENT_THRESHOLD * 100}%) - not auto-assigning`)
+      extractionResult.warnings.push(
+        `Lieferant "${extractionResult.supplier_detected || 'unbekannt'}" wurde mit nur ${Math.round(supplierMatchConfidence * 100)}% Sicherheit erkannt - bitte manuell prüfen`
+      )
+      // Clear the match so it won't be stored/assigned
+      matchedSupplierId = null
+      supplierMatchConfidence = 0
+      supplierMatchMethod = 'none'
+    }
+
     // 7. Match articles against database (PROJ-16)
     let articleMatchResults: ArticleMatchResult[] = []
     let articleMatchStats = { matched: 0, suggestions: 0, unmatched: 0, total: 0, matchRate: 0 }
@@ -634,9 +648,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (extractionResult.document_number_detected && confidenceScore > 0.7) {
       documentUpdate.document_number = extractionResult.document_number_detected
     }
-    // Update supplier if matched (threshold lowered from 0.8 to 0.5 to fix bug where
-    // detected suppliers weren't transferred to document overview)
-    if (matchedSupplierId && supplierMatchConfidence >= 0.5) {
+    // Update supplier if matched with sufficient confidence
+    // Threshold check is done earlier (before rawData creation) - here we just apply
+    if (matchedSupplierId) {
       documentUpdate.supplier_id = matchedSupplierId
     }
 

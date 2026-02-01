@@ -281,7 +281,7 @@ export default function DocumentsPage() {
         xhr.send(formData)
       })
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setUploadOpen(false)
       const count = data.documents?.length || 1
@@ -291,6 +291,34 @@ export default function DocumentsPage() {
         data.warnings.forEach((warning: { filename: string }) => {
           toast.warning(`Ähnliches Dokument bereits vorhanden: ${warning.filename}`)
         })
+      }
+
+      // PROJ-5 Fix: Auto-Extraktion starten wenn "Auto-Artikel" aktiviert ist
+      if (autoCreateArticles && data.documents && data.documents.length > 0) {
+        const docIds = data.documents.map((d: { id: string }) => d.id)
+        toast.info(`Starte Auto-Extraktion für ${docIds.length} Dokument(e)...`)
+
+        try {
+          const response = await fetch('/api/documents/extract-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              document_ids: docIds,
+              auto_create_articles: true,
+            }),
+          })
+
+          const result = await response.json()
+
+          if (response.ok) {
+            queryClient.invalidateQueries({ queryKey: ['documents'] })
+            toast.success(`Auto-Extraktion: ${result.successful}/${result.processed} erfolgreich`)
+          } else {
+            toast.error(result.error || 'Auto-Extraktion fehlgeschlagen')
+          }
+        } catch {
+          toast.error('Fehler bei der Auto-Extraktion')
+        }
       }
     },
     onError: (error: Error) => {
