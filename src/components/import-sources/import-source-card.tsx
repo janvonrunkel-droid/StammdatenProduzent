@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
+import { useState } from 'react'
 import {
   Folder,
   Server,
@@ -14,12 +14,15 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Clock,
+  Link,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +68,39 @@ export function ImportSourceCard({
   isToggling = false,
 }: ImportSourceCardProps) {
   const Icon = sourceTypeIcons[source.type as ImportSourceTypeValue] || Folder
+  const [isConnecting, setIsConnecting] = useState(false)
+
+  // Check if running on localhost (local folder scans only work locally)
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  )
+  const isLocalSource = source.type === 'local'
+  const showLocalWarning = isLocalSource && !isLocalhost
+
+  // Cloud OAuth status
+  const isCloudSource = ['gdrive', 'dropbox'].includes(source.type)
+  const config = source.config as Record<string, unknown>
+  const hasOAuthToken = isCloudSource && !!config.oauth_token
+  const needsOAuth = isCloudSource && !hasOAuthToken
+
+  // Handle OAuth connection
+  const handleConnect = async () => {
+    setIsConnecting(true)
+    try {
+      const res = await fetch(`/api/auth/${source.type}?source_id=${source.id}`)
+      const data = await res.json()
+      if (data.auth_url) {
+        window.location.href = data.auth_url
+      } else {
+        console.error('OAuth error:', data.error)
+      }
+    } catch (err) {
+      console.error('Failed to initiate OAuth:', err)
+    } finally {
+      setIsConnecting(false)
+    }
+  }
 
   const getStatusBadge = () => {
     if (!source.is_active) {
@@ -189,6 +225,46 @@ export function ImportSourceCard({
           </p>
         </div>
 
+        {/* Warning for local folders in production */}
+        {showLocalWarning && (
+          <Alert variant="warning" className="py-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              Lokale Ordner können nur gescannt werden, wenn die App lokal läuft (localhost).
+              Nutzen Sie alternativ den manuellen Upload.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* OAuth connection required for cloud sources */}
+        {needsOAuth && (
+          <Alert variant="warning" className="py-2">
+            <Link className="h-4 w-4" />
+            <AlertDescription className="text-xs flex items-center justify-between gap-2">
+              <span>
+                {source.type === 'gdrive' ? 'Google Drive' : 'Dropbox'} ist nicht verbunden.
+              </span>
+              <button
+                onClick={handleConnect}
+                disabled={isConnecting}
+                className="text-primary hover:underline font-medium whitespace-nowrap"
+              >
+                {isConnecting ? 'Verbinde...' : 'Jetzt verbinden'}
+              </button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Connected status for cloud sources */}
+        {hasOAuthToken && (
+          <Alert className="py-2 bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-xs text-green-700 dark:text-green-300">
+              {source.type === 'gdrive' ? 'Google Drive' : 'Dropbox'} ist verbunden.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Timing Info */}
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
@@ -241,7 +317,14 @@ export function ImportSourceCard({
             size="sm"
             className="flex-1"
             onClick={() => onScan(source)}
-            disabled={isScanning || !source.is_active}
+            disabled={isScanning || !source.is_active || showLocalWarning || needsOAuth}
+            title={
+              showLocalWarning
+                ? 'Lokale Ordner können nur auf localhost gescannt werden'
+                : needsOAuth
+                  ? 'Bitte erst mit Cloud-Dienst verbinden'
+                  : undefined
+            }
           >
             {isScanning ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
