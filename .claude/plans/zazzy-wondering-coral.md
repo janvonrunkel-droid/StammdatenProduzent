@@ -202,6 +202,80 @@ thresholds: {
 
 ---
 
+## Session 5: E2E Tests mit Playwright ✅ ABGESCHLOSSEN
+
+**Datum:** 2026-02-01
+
+### Erledigte Aufgaben:
+- [x] Playwright installieren (`@playwright/test@^1.58.1`)
+- [x] Chromium Browser installieren (`npx playwright install chromium`)
+- [x] `playwright.config.ts` erstellen mit Auth-Setup
+- [x] `.env.test` für Test-Credentials erstellen
+- [x] `tests/e2e/auth.setup.ts` für Login-Authentifizierung erstellen
+- [x] Page Objects erstellen für Documents und Review Editor
+- [x] E2E Workflow Test erstellen (PDF Upload → Extract → Review → Approve)
+- [x] npm Scripts hinzufügen (`test:e2e`, `test:e2e:ui`, `test:e2e:headed`, `test:e2e:debug`)
+
+### Erstellte Dateien:
+```
+playwright.config.ts           # Playwright-Konfiguration
+.env.test                      # Test-Environment (nicht in Git)
+
+tests/
+├── e2e/
+│   ├── .auth/                 # Auth-State Storage (nicht in Git)
+│   ├── auth.setup.ts          # Login-Setup vor Tests
+│   └── workflows/
+│       └── pdf-upload-to-article.spec.ts  # Haupt-Workflow Test
+├── page-objects/
+│   ├── documents.page.ts      # Documents Page Object
+│   └── review-editor.page.ts  # Review Editor Page Object
+└── fixtures/
+    └── (test-invoice.pdf)     # Test-PDF (manuell hinzufügen)
+```
+
+### Playwright Konfiguration:
+- **Browser:** Chromium only (für Entwicklung)
+- **Auth-Setup:** Speichert Login-State für schnellere Tests
+- **Webserver:** Startet `npm run dev` automatisch
+- **Reporter:** HTML + List
+- **Retries:** 2 auf CI, 0 lokal
+- **Screenshots/Videos:** Bei Fehlern
+
+### npm Scripts:
+- `npm run test:e2e` - Alle E2E Tests headless
+- `npm run test:e2e:ui` - Playwright UI Mode
+- `npm run test:e2e:headed` - Mit sichtbarem Browser
+- `npm run test:e2e:debug` - Debug-Modus
+
+### Page Objects:
+1. **DocumentsPage** - Upload, Extract, Filter, Navigation
+2. **ReviewEditorPage** - Position editing, Approve/Reject, Save
+
+### Test-Kategorien (pdf-upload-to-article.spec.ts):
+1. **PDF Upload to Article Workflow** (4 Tests)
+   - Complete workflow: upload → extract → review → approve
+   - Handle extraction with low confidence
+   - Allow editing positions before approval
+   - Reject document with reason
+2. **Document Upload Validation** (2 Tests)
+   - Show upload dialog with correct fields
+   - Navigate between documents and review
+3. **Accessibility** (2 Tests)
+   - Documents page should have proper headings
+   - Review editor should have accessible form controls
+
+### Voraussetzungen für E2E Tests:
+1. Test-User in Supabase erstellen
+2. `.env.test` mit Credentials füllen:
+   ```
+   TEST_USER_EMAIL=test@example.com
+   TEST_USER_PASSWORD=your_password
+   ```
+3. Optional: `tests/fixtures/test-invoice.pdf` hinzufügen
+
+---
+
 ## Hinweise für zukünftige Sessions:
 - Vitest v3.2.4 wird verwendet (nicht v4, da Kompatibilitätsprobleme mit Node v25)
 - `@vitest/coverage-v8@^3.2.4` muss mit Vitest-Version übereinstimmen
@@ -221,5 +295,192 @@ thresholds: {
 | 2. Supplier-Matcher | ✅ | 78 |
 | 3. Integration Tests | ✅ | 185 |
 | 4. CI/CD Integration | ✅ | 185 |
+| 5. E2E Tests (Playwright) | ✅ | 8 |
 
-**Gesamtzahl Tests:** 185 (Unit: 78, Integration: 107)
+**Gesamtzahl Tests:** ~300 (Unit: 78, Integration: 107, E2E: ~115)
+
+---
+
+## Session 6: Vollständige E2E-Testabdeckung ✅ ABGESCHLOSSEN
+
+**Datum:** 2026-02-01
+
+### Erledigte Aufgaben:
+- [x] Page Objects für alle Hauptseiten erstellen
+- [x] CRUD-Tests für Lieferanten und Artikel
+- [x] Duplikat-Erkennungs-Tests
+- [x] Settings-Tests mit Toggle und Navigation
+- [x] Review-Workflow-Tests (Approval & Rejection)
+- [x] Filter- und Such-Tests für alle Seiten
+- [x] Edge-Case-Tests (Empty States, Validierung, Auth, Responsive)
+
+### Erstellte Dateien:
+```
+tests/
+├── page-objects/
+│   ├── index.ts                 # Export aller Page Objects
+│   ├── documents.page.ts        # (Session 5)
+│   ├── review-editor.page.ts    # (Session 5)
+│   ├── suppliers.page.ts        # NEU: CRUD, Suche, Formulare
+│   ├── articles.page.ts         # NEU: CRUD, Filter, View-Modi
+│   ├── duplicates.page.ts       # NEU: Tabs, Threshold, Exclude
+│   ├── settings.page.ts         # NEU: Toggle, Save, Navigation
+│   └── review.page.ts           # NEU: Queue-Filter, Sortierung
+├── e2e/
+│   ├── auth.setup.ts            # (Session 5)
+│   ├── workflows/
+│   │   └── pdf-upload-to-article.spec.ts  # (Session 5)
+│   ├── suppliers.spec.ts        # NEU: 15 Tests
+│   ├── articles.spec.ts         # NEU: 15 Tests
+│   ├── duplicates.spec.ts       # NEU: 12 Tests
+│   ├── settings.spec.ts         # NEU: 10 Tests
+│   ├── review-workflow.spec.ts  # NEU: 15 Tests
+│   ├── filters-search.spec.ts   # NEU: 20 Tests
+│   └── edge-cases.spec.ts       # NEU: 20 Tests
+```
+
+### Neue Page Objects:
+
+| Page Object | Seite | Funktionen |
+|-------------|-------|------------|
+| `SuppliersPage` | `/suppliers` | CRUD, Suche, Formular-Dialoge, Löschen mit Bestätigung |
+| `ArticlesPage` | `/articles` | CRUD, Suche, Filter, Sortierung, Table/Grid View |
+| `DuplicatesPage` | `/duplicates` | Tabs, Threshold-Filter, Exclude-Funktion |
+| `SettingsPage` | `/settings` | Auto-Create Toggle, Save, Sub-Seiten-Navigation |
+| `ReviewPage` | `/review` | Queue-Filter, Sortierung, Navigation zu Editor |
+
+### Neue Test-Dateien:
+
+| Datei | Tests | Abdeckung |
+|-------|-------|-----------|
+| `suppliers.spec.ts` | ~15 | CRUD, Suche, Validierung, Accessibility |
+| `articles.spec.ts` | ~15 | CRUD, Suche, View-Modi, Sortierung |
+| `duplicates.spec.ts` | ~12 | Tabs, Threshold, Exclude, Empty State |
+| `settings.spec.ts` | ~10 | Toggle, Save, Navigation, Accessibility |
+| `review-workflow.spec.ts` | ~15 | Queue, Editor, Approval, Rejection |
+| `filters-search.spec.ts` | ~20 | Suche/Filter auf allen Seiten |
+| `edge-cases.spec.ts` | ~20 | Empty States, Validierung, Auth, Responsive |
+
+### Test-Kategorien:
+
+**1. CRUD-Operationen:**
+- Lieferanten: Create, Read, Update, Delete
+- Artikel: Create, Read, Update, Delete
+- Formulare: Validierung, Cancel, Submit
+
+**2. Workflow-Tests:**
+- Review-Queue: Filtern, Sortieren, Navigation
+- Approval-Flow: Genehmigung mit Bestätigung
+- Rejection-Flow: Ablehnung mit Begründung
+- Position-Bearbeitung: Mengen, Preise ändern
+
+**3. Filter & Suche:**
+- Documents: Status-Filter, Typ-Filter, Suche
+- Articles: Name/Nummer-Suche, Tag-Filter, Sortierung
+- Suppliers: Name-Suche, Sortierung
+- Review-Queue: Konfidenz-Filter, Datum-Filter
+
+**4. Edge Cases:**
+- Empty States: Leere Listen, keine Suchergebnisse
+- Validierung: Pflichtfelder, E-Mail-Format
+- Error Handling: Ungültige IDs, Netzwerkfehler
+- Auth: Unauthentifizierter Zugriff
+- Responsive: Mobile, Tablet Viewports
+- Special Characters: Unicode, Sonderzeichen in Suche/Formularen
+
+### Deutsche UI-Labels (verwendet in Tests):
+- Buttons: "Neuer Lieferant", "Neuer Artikel", "Speichern", "Abbrechen", "Löschen"
+- Status: "Ausstehend", "Geprüft", "Abgeschlossen", "Abgelehnt"
+- Actions: "Übernehmen", "Ablehnen", "Kein Duplikat", "Aktualisieren"
+- Toast: "angelegt", "gespeichert", "gelöscht", "abgelehnt"
+
+---
+
+## Projekt-Status (Aktualisiert)
+
+| Session | Status | Tests |
+|---------|--------|-------|
+| 1. Basis-Setup | ✅ | 16 |
+| 2. Supplier-Matcher | ✅ | 78 |
+| 3. Integration Tests | ✅ | 185 |
+| 4. CI/CD Integration | ✅ | 185 |
+| 5. E2E Tests (Basis) | ✅ | 8 |
+| 6. E2E Tests (Vollständig) | ✅ | ~115 |
+
+**Gesamtzahl Tests:** ~300 (Unit: 78, Integration: 107, E2E: ~115)
+
+---
+
+## Test-Struktur Übersicht
+
+```
+tests/
+├── setup.ts                           # Test-Setup
+├── tsconfig.json                      # TypeScript für Tests
+│
+├── fixtures/                          # Test-Daten
+│   ├── articles.ts                    # Artikel-Testdaten
+│   ├── suppliers.ts                   # Lieferanten-Testdaten
+│   ├── pdf-samples.ts                 # PDF-Textbeispiele
+│   └── test-invoice.pdf               # Test-PDF (manuell)
+│
+├── mocks/
+│   └── supabase.ts                    # Supabase-Mock
+│
+├── unit/                              # Unit-Tests
+│   └── extraction/
+│       ├── article-matcher.test.ts    # 16 Tests
+│       └── supplier-matcher.test.ts   # 62 Tests
+│
+├── integration/                       # Integration-Tests
+│   ├── pdf-extraction.test.ts         # 79 Tests
+│   └── supabase-operations.test.ts    # 28 Tests
+│
+├── page-objects/                      # Page Objects (E2E)
+│   ├── index.ts                       # Exports
+│   ├── documents.page.ts
+│   ├── review-editor.page.ts
+│   ├── suppliers.page.ts
+│   ├── articles.page.ts
+│   ├── duplicates.page.ts
+│   ├── settings.page.ts
+│   └── review.page.ts
+│
+└── e2e/                               # E2E-Tests
+    ├── .auth/                         # Auth-State (nicht in Git)
+    ├── auth.setup.ts                  # Login-Setup
+    ├── workflows/
+    │   └── pdf-upload-to-article.spec.ts
+    ├── suppliers.spec.ts
+    ├── articles.spec.ts
+    ├── duplicates.spec.ts
+    ├── settings.spec.ts
+    ├── review-workflow.spec.ts
+    ├── filters-search.spec.ts
+    └── edge-cases.spec.ts
+```
+
+---
+
+## Befehle
+
+### Unit & Integration Tests (Vitest)
+```bash
+npm run test              # Watch-Modus
+npm run test:run          # Einmalige Ausführung
+npm run test:coverage     # Mit Coverage-Report
+```
+
+### E2E Tests (Playwright)
+```bash
+npm run test:e2e          # Alle E2E Tests headless
+npm run test:e2e:ui       # Playwright UI Mode
+npm run test:e2e:headed   # Mit sichtbarem Browser
+npm run test:e2e:debug    # Debug-Modus
+```
+
+### Einzelne Test-Dateien
+```bash
+npx vitest article-matcher       # Unit-Tests für Article-Matcher
+npx playwright test suppliers    # E2E-Tests für Suppliers
+```

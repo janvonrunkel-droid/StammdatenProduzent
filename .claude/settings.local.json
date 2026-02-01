@@ -74,7 +74,18 @@
       "Bash(npx supabase:*)",
       "Bash(npx tsx:*)",
       "Bash(dir /b \"c:\\\\Users\\\\info\\\\StammdatenProduzent\\\\issues\"\")",
-      "mcp__n8n__list_workflows"
+      "mcp__n8n__list_workflows",
+      "Bash(gh run list:*)",
+      "Bash(grep:*)",
+      "Bash(git branch:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npm --version:*)",
+      "Bash(DEBUG=vitest:*)",
+      "Bash(npx husky:*)",
+      "Bash(npm run test:coverage:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npx playwright test:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
