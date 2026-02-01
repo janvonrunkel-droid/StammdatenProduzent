@@ -1,5 +1,8 @@
 # AI Coding Starter Kit – Production-Ready Template
 
+![Tests](https://github.com/janvonrunkel-droid/StammdatenProduzent/actions/workflows/test.yml/badge.svg)
+![Coverage](https://img.shields.io/badge/coverage-70%25-green)
+
 > **Build scalable, production-ready web apps faster** with AI agents handling Requirements, Architecture, Development, QA, and Deployment.
 
 This template includes everything you need for professional AI-powered development:
@@ -266,10 +269,13 @@ Agent guides you through deployment + Production-Ready setup (Error Tracking, Se
 ## Scripts
 
 ```bash
-npm run dev        # Start development server (localhost:3000)
-npm run build      # Production build
-npm run start      # Start production server
-npm run lint       # Run ESLint
+npm run dev           # Start development server (localhost:3000)
+npm run build         # Production build
+npm run start         # Start production server
+npm run lint          # Run ESLint
+npm run test          # Run tests in watch mode
+npm run test:run      # Run tests once
+npm run test:coverage # Run tests with coverage report
 ```
 
 ---
