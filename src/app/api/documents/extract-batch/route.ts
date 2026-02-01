@@ -190,28 +190,39 @@ async function processDocument(
     // 6. Match articles (PROJ-16)
     let articleMatchResults: ArticleMatchResult[] = []
     let articleMatchStats = { matched: 0, suggestions: 0, unmatched: 0, total: 0, matchRate: 0 }
+    let articleMatchingSkipped = false
+    let articleMatchingSkipReason: string | null = null
 
-    if (extractionResult.positions.length > 0 && articles.length > 0) {
-      // Mark articles that have prices from the matched supplier
-      const articlesWithSupplierInfo = articles.map((article) => ({
-        ...article,
-        has_supplier_prices: matchedSupplierId
-          ? article.has_supplier_prices
-          : false,
-      }))
+    if (extractionResult.positions.length > 0) {
+      if (articles.length > 0) {
+        // Mark articles that have prices from the matched supplier
+        const articlesWithSupplierInfo = articles.map((article) => ({
+          ...article,
+          has_supplier_prices: matchedSupplierId
+            ? article.has_supplier_prices
+            : false,
+        }))
 
-      // Perform article matching
-      articleMatchResults = matchAllPositions(
-        extractionResult.positions.map((p) => ({
-          article_name: p.article_name,
-          article_number: p.article_number,
-          unit: p.unit,
-        })),
-        articlesWithSupplierInfo,
-        matchedSupplierId
-      )
+        // Perform article matching
+        articleMatchResults = matchAllPositions(
+          extractionResult.positions.map((p) => ({
+            article_name: p.article_name,
+            article_number: p.article_number,
+            unit: p.unit,
+          })),
+          articlesWithSupplierInfo,
+          matchedSupplierId
+        )
 
-      articleMatchStats = getMatchStatistics(articleMatchResults)
+        articleMatchStats = getMatchStatistics(articleMatchResults)
+        console.log(`[Extract-Batch] Article matching for ${documentId}: ${articleMatchStats.matched}/${articleMatchStats.total} matched, ${articleMatchStats.suggestions} suggestions`)
+      } else {
+        // No articles in database - add warning
+        console.warn(`[Extract-Batch] No articles found in database for ${documentId} - article matching skipped`)
+        extractionResult.warnings.push('Artikel-Matching übersprungen: Keine Artikel in der Datenbank vorhanden')
+        articleMatchingSkipped = true
+        articleMatchingSkipReason = 'no_articles'
+      }
     }
 
     // 7. Calculate confidence and determine status
@@ -265,6 +276,8 @@ async function processDocument(
       page_count: extractionResult.page_count,
       // Article matching statistics (PROJ-16)
       article_match_stats: articleMatchStats,
+      article_matching_skipped: articleMatchingSkipped || undefined,
+      article_matching_skip_reason: articleMatchingSkipReason || undefined,
     }
 
     // 9. Save extraction
@@ -400,7 +413,7 @@ export async function POST(request: NextRequest) {
     .is('deleted_at', null)
 
   // PROJ-16: Get all articles for matching (with supplier price info)
-  const { data: articlesWithPrices } = await supabase
+  const { data: articlesWithPrices, error: articlesWithPricesError } = await supabase
     .from('articles')
     .select(`
       id,
@@ -411,10 +424,18 @@ export async function POST(request: NextRequest) {
     `)
     .is('deleted_at', null)
 
-  const { data: articlesWithoutPrices } = await supabase
+  const { data: articlesWithoutPrices, error: articlesError } = await supabase
     .from('articles')
     .select('id, name, article_number, unit_id')
     .is('deleted_at', null)
+
+  // Log any errors loading articles
+  if (articlesError) {
+    console.error(`[Extract-Batch] Error loading articles: ${articlesError.message}`)
+  }
+  if (articlesWithPricesError) {
+    console.warn(`[Extract-Batch] Error loading articles with prices (non-fatal): ${articlesWithPricesError.message}`)
+  }
 
   // Combine and prepare articles for matching
   const articlesMap = new Map<string, ArticleWithSupplierPrices>()
@@ -442,6 +463,7 @@ export async function POST(request: NextRequest) {
   })
 
   const articles = Array.from(articlesMap.values())
+  console.log(`[Extract-Batch] Loaded ${articles.length} articles for matching`)
 
   // Process documents sequentially (to avoid overloading)
   const results: BatchResult[] = []

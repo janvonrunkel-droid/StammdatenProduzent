@@ -433,10 +433,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 7. Match articles against database (PROJ-16)
     let articleMatchResults: ArticleMatchResult[] = []
     let articleMatchStats = { matched: 0, suggestions: 0, unmatched: 0, total: 0, matchRate: 0 }
+    let articleMatchingSkipped = false
+    let articleMatchingSkipReason: string | null = null
 
     if (extractionResult.positions.length > 0) {
       // Load articles with supplier price information for matching
-      const { data: articlesData } = await supabase
+      const { data: articlesData, error: articlesWithPricesError } = await supabase
         .from('articles')
         .select(`
           id,
@@ -448,10 +450,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .is('deleted_at', null)
 
       // Also get articles without prices (they still need to be matchable)
-      const { data: articlesWithoutPrices } = await supabase
+      const { data: articlesWithoutPrices, error: articlesError } = await supabase
         .from('articles')
         .select('id, name, article_number, unit_id')
         .is('deleted_at', null)
+
+      // Log any errors loading articles
+      if (articlesError) {
+        console.error(`[Extract] Error loading articles: ${articlesError.message}`)
+        extractionResult.warnings.push(`Artikel-Matching übersprungen: Fehler beim Laden der Artikel (${articlesError.message})`)
+        articleMatchingSkipped = true
+        articleMatchingSkipReason = 'database_error'
+      }
+
+      if (articlesWithPricesError) {
+        console.warn(`[Extract] Error loading articles with prices (non-fatal): ${articlesWithPricesError.message}`)
+      }
 
       // Combine and deduplicate
       const articlesMap = new Map<string, ArticleWithSupplierPrices>()
@@ -484,6 +498,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       })
 
       const articles = Array.from(articlesMap.values())
+      console.log(`[Extract] Loaded ${articles.length} articles for matching`)
 
       if (articles.length > 0) {
         // Perform article matching
@@ -499,7 +514,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
         articleMatchStats = getMatchStatistics(articleMatchResults)
         console.log(`[Extract] Article matching: ${articleMatchStats.matched}/${articleMatchStats.total} matched, ${articleMatchStats.suggestions} suggestions`)
+      } else if (!articleMatchingSkipped) {
+        // No articles in database - add warning
+        console.warn(`[Extract] No articles found in database - article matching skipped`)
+        extractionResult.warnings.push('Artikel-Matching übersprungen: Keine Artikel in der Datenbank vorhanden')
+        articleMatchingSkipped = true
+        articleMatchingSkipReason = 'no_articles'
       }
+    } else {
+      console.log(`[Extract] No positions extracted - article matching skipped`)
     }
 
     // 8. Calculate confidence score
@@ -565,6 +588,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       page_count: extractionResult.page_count,
       // Article matching statistics (PROJ-16)
       article_match_stats: articleMatchStats,
+      article_matching_skipped: articleMatchingSkipped || undefined,
+      article_matching_skip_reason: articleMatchingSkipReason || undefined,
     }
 
     // 11. Save extraction result

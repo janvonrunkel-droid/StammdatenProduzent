@@ -73,7 +73,8 @@
       "Bash(pgrep:*)",
       "Bash(npx supabase:*)",
       "Bash(npx tsx:*)",
-      "Bash(dir /b \"c:\\\\Users\\\\info\\\\StammdatenProduzent\\\\issues\"\")"
+      "Bash(dir /b \"c:\\\\Users\\\\info\\\\StammdatenProduzent\\\\issues\"\")",
+      "mcp__n8n__list_workflows"
     ]
   },
   "enableAllProjectMcpServers": true,
