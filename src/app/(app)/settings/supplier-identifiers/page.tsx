@@ -90,7 +90,7 @@ export default function SupplierIdentifiersPage() {
   })
 
   // Fetch all suppliers for dropdown
-  const { data: suppliersData } = useQuery<{ data: Supplier[] }>({
+  const { data: suppliersData, isLoading: suppliersLoading } = useQuery<{ data: Supplier[] }>({
     queryKey: ['suppliers'],
     queryFn: async () => {
       const response = await fetch('/api/suppliers?limit=500')
@@ -368,12 +368,25 @@ export default function SupplierIdentifiersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Lieferant auswählen..." />
                 </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((supplier) => (
-                    <SelectItem key={supplier.id} value={supplier.id}>
-                      {supplier.name}
+                <SelectContent position="popper" className="max-h-[300px] overflow-y-auto z-[100]">
+                  {suppliersLoading ? (
+                    <SelectItem value="_loading" disabled>
+                      <div className="flex items-center">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Laden...
+                      </div>
                     </SelectItem>
-                  ))}
+                  ) : suppliers.length === 0 ? (
+                    <SelectItem value="_empty" disabled>
+                      Keine Lieferanten gefunden
+                    </SelectItem>
+                  ) : (
+                    suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
