@@ -377,11 +377,11 @@ export async function POST(request: NextRequest) {
     // No body or invalid JSON - process all pending
   }
 
-  // Get pending documents (owned by current user)
+  // Get pending documents (owned by current user OR auto-imported with created_by=null)
   let query = supabase
     .from('documents')
     .select('id, file_path')
-    .eq('created_by', user.id)
+    .or(`created_by.eq.${user.id},created_by.is.null`)
     .eq('status', 'pending')
     .limit(MAX_BATCH_SIZE)
 
