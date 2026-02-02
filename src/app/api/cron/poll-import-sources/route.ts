@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pollAllSources } from '@/lib/import'
+import { processPendingDocuments } from '@/lib/extraction/extract-document'
+import { createClient } from '@supabase/supabase-js'
 
 /**
  * GET /api/cron/poll-import-sources
@@ -34,29 +36,56 @@ export async function GET(request: NextRequest) {
     console.log('[Cron] Starting scheduled poll of import sources')
     const startTime = Date.now()
 
+    // Phase 1: Poll import sources for new files
     const results = await pollAllSources()
 
-    const duration = Date.now() - startTime
-    const summary = {
+    const importSummary = {
       sources_scanned: results.length,
       total_files_found: results.reduce((sum, r) => sum + r.files_found, 0),
       total_files_processed: results.reduce((sum, r) => sum + r.files_processed, 0),
       total_files_duplicate: results.reduce((sum, r) => sum + r.files_duplicate, 0),
       total_files_error: results.reduce((sum, r) => sum + r.files_error, 0),
-      duration_ms: duration,
     }
 
     console.log(
-      `[Cron] Poll completed in ${duration}ms. ` +
-      `Sources: ${summary.sources_scanned}, ` +
-      `Processed: ${summary.total_files_processed}, ` +
-      `Duplicates: ${summary.total_files_duplicate}, ` +
-      `Errors: ${summary.total_files_error}`
+      `[Cron] Import poll completed. ` +
+      `Sources: ${importSummary.sources_scanned}, ` +
+      `Processed: ${importSummary.total_files_processed}, ` +
+      `Duplicates: ${importSummary.total_files_duplicate}, ` +
+      `Errors: ${importSummary.total_files_error}`
     )
+
+    // Phase 2: Process pending documents (extraction)
+    console.log('[Cron] Processing pending documents for extraction')
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    const extractionResult = await processPendingDocuments(supabase, 10)
+
+    const duration = Date.now() - startTime
+
+    console.log(
+      `[Cron] Extraction completed. ` +
+      `Processed: ${extractionResult.processed}, ` +
+      `Success: ${extractionResult.success}, ` +
+      `Failed: ${extractionResult.failed}`
+    )
+
+    console.log(`[Cron] Total duration: ${duration}ms`)
 
     return NextResponse.json({
       status: 'completed',
-      summary,
+      import_summary: importSummary,
+      extraction_summary: {
+        documents_processed: extractionResult.processed,
+        documents_success: extractionResult.success,
+        documents_failed: extractionResult.failed,
+      },
+      duration_ms: duration,
       executed_at: new Date().toISOString(),
     })
   } catch (error) {
