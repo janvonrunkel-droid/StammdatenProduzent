@@ -51,3 +51,38 @@ Import (jeder Kanal) → Document in DB (status=pending)
 
 ## Supabase Project
 `hjkxwyagpghgzpemrdyy`
+
+---
+
+## Bug Fix: Lieferanten-Matching False Positive (2026-02-02)
+
+**Issue:** `issues/high-lieferanten-matching-bug-2.md`
+
+### Problem
+>50% aller Dokumente wurden fälschlicherweise "Bauen und Leben" zugeordnet.
+
+### Root Cause
+Der Identifier `KRE` für "Bauen und Leben" war zu unspezifisch:
+- **Wert:** `KRE` (nur 3 Zeichen)
+- **Operator:** `contains`
+- **Priorität:** `hoch`
+
+→ Matched auf: "**Kre**feld" (Adressen), "Se**kre**tär", "**Kre**dit", andere Rechnungsnummern mit "KRE"
+
+### Lösung
+
+| Fix | Datei | Beschreibung |
+|-----|-------|--------------|
+| Migration | `supabase/migrations/20260202_fix_kre_identifier.sql` | `KRE` → `KRE ` mit `starts_with` |
+| Code | `src/lib/extraction/supplier-matcher.ts` | `MIN_CONTAINS_IDENTIFIER_LENGTH = 4` - Kurze contains-Identifier werden übersprungen |
+| Tests | `tests/unit/extraction/supplier-matcher.test.ts` | 4 neue Tests für short identifier handling |
+
+### Commit
+```
+63b21ee fix: Prevent false positive supplier matching for short identifiers
+```
+
+### Lessons Learned
+1. **Identifier-Mindestlänge:** `contains`-Identifier sollten mindestens 4 Zeichen haben
+2. **Operator-Wahl:** Für Präfixe wie "KRE " besser `starts_with` statt `contains` verwenden
+3. **Code-Schutz:** Neue Validierung verhindert zukünftige ähnliche Probleme automatisch
