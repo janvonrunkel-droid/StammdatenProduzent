@@ -344,10 +344,17 @@ async function processFile(
 
     console.log(`[ImportService] Successfully processed: ${file.name} -> document ${documentId}`)
 
-    // 10. Trigger extraction (async - don't wait for completion)
-    triggerExtraction(documentId).catch(err => {
+    // 10. Trigger extraction - MUST await to ensure fetch starts before serverless function ends
+    // Note: The extract endpoint runs in its own serverless function, so even if our
+    // timeout fires, the extraction will continue running on the server
+    try {
+      await triggerExtraction(documentId)
+      console.log(`[ImportService] Extraction triggered successfully for ${documentId}`)
+    } catch (err) {
+      // Log error but don't fail the import - extraction can be retried manually
       console.error(`[ImportService] Extraction trigger failed for ${documentId}:`, err)
-    })
+      // Note: If this is a timeout, the extraction might still be running on the server
+    }
 
     return {
       success: true,
@@ -470,11 +477,17 @@ async function findSupplierFromPath(
 
 /**
  * Trigger extraction for a document (calls internal API)
+ * Uses a timeout to prevent blocking the import process for too long.
+ * Note: The extract endpoint runs in its own serverless function, so even if
+ * we timeout here, the extraction will continue running on the server.
  */
 async function triggerExtraction(documentId: string): Promise<void> {
+  // Timeout for the trigger request (30 seconds)
+  // This is just for our wait - the actual extraction continues on the server
+  const TRIGGER_TIMEOUT_MS = 30 * 1000
+
   // Use internal fetch to call the extraction API
   // Priority: NEXT_PUBLIC_APP_URL > VERCEL_URL > localhost
-  // BUG FIX: Fixed operator precedence issue that caused incorrect URL resolution
   let baseUrl: string
   if (process.env.NEXT_PUBLIC_APP_URL) {
     baseUrl = process.env.NEXT_PUBLIC_APP_URL
@@ -486,22 +499,42 @@ async function triggerExtraction(documentId: string): Promise<void> {
 
   console.log(`[ImportService] Triggering extraction for document ${documentId} via ${baseUrl}`)
 
-  const response = await fetch(`${baseUrl}/api/documents/${documentId}/extract`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // Use service role key for internal API calls
-      'x-service-key': supabaseServiceKey,
-    },
-  })
+  // Create an AbortController for timeout
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), TRIGGER_TIMEOUT_MS)
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-    console.error(`[ImportService] Extraction trigger failed for ${documentId}:`, error)
-    throw new Error(`Extraction trigger failed: ${error.error || response.statusText}`)
+  try {
+    const response = await fetch(`${baseUrl}/api/documents/${documentId}/extract`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Use service role key for internal API calls
+        'x-service-key': supabaseServiceKey,
+      },
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+      console.error(`[ImportService] Extraction trigger failed for ${documentId}:`, error)
+      throw new Error(`Extraction trigger failed: ${error.error || response.statusText}`)
+    }
+
+    console.log(`[ImportService] Extraction completed for document ${documentId}`)
+  } catch (err) {
+    clearTimeout(timeoutId)
+
+    // Check if this was a timeout/abort
+    if (err instanceof Error && err.name === 'AbortError') {
+      // Timeout is OK - extraction is still running on the server
+      console.log(`[ImportService] Extraction trigger timed out for ${documentId} - extraction continues in background`)
+      return // Don't throw - this is expected behavior
+    }
+
+    throw err
   }
-
-  console.log(`[ImportService] Extraction triggered successfully for document ${documentId}`)
 }
 
 /**

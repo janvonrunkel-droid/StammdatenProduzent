@@ -1,12 +1,13 @@
 # Bug: Auto-importierte Dokumente werden nicht automatisch extrahiert
 
 ## Meta
-- **Status:** Reported
+- **Status:** Fixed
 - **Kategorie:** API/Backend
 - **Priorität:** High
 - **Feature:** Auto-Import / Google Drive Integration
 - **Gemeldet:** 2026-02-02
-- **Zugewiesen:** Nicht zugewiesen
+- **Zugewiesen:** Backend Developer
+- **Behoben:** 2026-02-02
 
 ---
 
@@ -34,14 +35,31 @@ Dokumente, die über Google Drive Auto-Import hochgeladen werden, werden zwar ko
 - URL: https://stammdaten-produzent.vercel.app/documents
 - Feature: Google Drive Auto-Import
 
-## Mögliche Ursachen
-1. Import-Service ruft Extraktion nicht auf
-2. Extraktion-Trigger fehlt nach Upload
-3. Queue/Worker für Auto-Extraktion nicht implementiert
+## Root Cause
+Die `triggerExtraction()` Funktion in `import-service.ts` wurde als "fire-and-forget" aufgerufen (ohne `await`).
+
+In Vercel's Serverless-Umgebung wird die Funktion beendet, sobald die HTTP-Response gesendet wird. Der `fetch`-Request zur Extract-API wurde gestartet, aber abgebrochen bevor er das Ziel erreichte, da die Serverless-Funktion vorzeitig terminierte.
+
+```typescript
+// VORHER (Bug):
+triggerExtraction(documentId).catch(err => { ... })
+return { success: true, ... }
+
+// Die Serverless-Funktion gibt die Response zurück und wird beendet.
+// Der fetch-Request wird nie vollendet → Extraktion startet nie.
+```
+
+## Lösung
+Die `triggerExtraction()` Funktion wird jetzt `await`-ed und hat einen 30-Sekunden Client-Timeout:
+
+1. **await triggerExtraction()**: Der fetch-Request wird vollständig abgeschlossen bevor die Response gesendet wird
+2. **30s Timeout**: Falls die Extraktion länger dauert, wird der Client-seitige Timeout ausgelöst - aber die Extraktion läuft trotzdem weiter (in einer separaten Serverless-Funktion)
+3. **Graceful Timeout Handling**: Bei Timeout wird kein Fehler geworfen - die Extraktion läuft im Hintergrund weiter
 
 ---
 
 ## Fix-Log
 | Datum | Agent | Aktion |
 |-------|-------|--------|
-| | | |
+| 2026-02-02 | Backend Developer | Root cause identifiziert: fire-and-forget pattern in Serverless |
+| 2026-02-02 | Backend Developer | Fix: await triggerExtraction() mit 30s timeout in `src/lib/import/import-service.ts` |
