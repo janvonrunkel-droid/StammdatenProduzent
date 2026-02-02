@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
       { count: 'exact' }
     )
 
-  // BUG-SEC-1 Fix: Only show documents created by the current user
-  query = query.eq('created_by', user.id)
+  // BUG-SEC-1 Fix: Only show documents created by the current user OR auto-imported (null)
+  query = query.or(`created_by.eq.${user.id},created_by.is.null`)
 
   // Apply filters
   if (type) {
