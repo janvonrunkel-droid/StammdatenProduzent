@@ -295,7 +295,7 @@ export class GoogleDriveFileSystemAdapter implements FileSystemAdapter {
 
     return oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/drive.file'],
+      scope: ['https://www.googleapis.com/auth/drive'],
       prompt: 'consent',
       state,
     })
