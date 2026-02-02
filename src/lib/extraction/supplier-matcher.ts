@@ -37,6 +37,10 @@ export interface MatchResult {
 const CONFIDENCE_THRESHOLD = 0.8 // 80%
 const MIN_FUZZY_SCORE = 70 // fuzzball score (0-100)
 
+// Minimum length for "contains" identifiers to avoid false positives
+// Short identifiers like "KRE" match too many false positives (e.g., "Krefeld", "Sekretär")
+const MIN_CONTAINS_IDENTIFIER_LENGTH = 4
+
 /**
  * Clean and normalize company name for comparison
  */
@@ -360,6 +364,20 @@ export function matchSupplierByIdentifiers(
     })
 
   for (const identifier of sortedIdentifiers) {
+    // Skip "contains" identifiers that are too short (high false positive risk)
+    // e.g., "KRE" matches "Krefeld", "Sekretär", etc.
+    if (
+      (identifier.operator === 'contains' || !identifier.operator) &&
+      identifier.identifier_value.trim().length < MIN_CONTAINS_IDENTIFIER_LENGTH
+    ) {
+      console.warn(
+        `[SupplierMatcher] Skipping short "contains" identifier "${identifier.identifier_value}" ` +
+        `(length ${identifier.identifier_value.trim().length} < ${MIN_CONTAINS_IDENTIFIER_LENGTH}) - ` +
+        `high false positive risk. Consider using "starts_with" or a longer value.`
+      )
+      continue
+    }
+
     if (matchesIdentifier(pdfText, identifier)) {
       return {
         supplier_id: identifier.supplier_id,

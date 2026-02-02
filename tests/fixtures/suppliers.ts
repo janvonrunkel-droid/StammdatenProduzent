@@ -22,6 +22,8 @@ export interface TestSupplierIdentifier {
   priority: 'hoch' | 'mittel' | 'niedrig'
   is_active: boolean
   supplier?: { id: string; name: string } | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 // Blocklist entry type
@@ -172,6 +174,18 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'hoch',
     is_active: true,
     supplier: { id: 'sup-007', name: 'Getränke Hoffmann AG' },
+  },
+  // Short "contains" identifier - should be skipped (false positive risk)
+  // Bug fix: high-lieferanten-matching-bug-2.md
+  {
+    id: 'id-007',
+    supplier_id: 'sup-008',
+    identifier_type: 'rechnungsnummer',
+    identifier_value: 'KRE',
+    operator: 'contains',
+    priority: 'hoch',
+    is_active: true,
+    supplier: { id: 'sup-008', name: 'Molkerei Alpenfrisch' },
   },
 ]
 

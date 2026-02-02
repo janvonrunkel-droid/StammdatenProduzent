@@ -381,6 +381,49 @@ describe('matchSupplierByIdentifiers', () => {
     expect(result?.supplier_id).toBe('sup-002')
     expect(result?.priority).toBe('hoch')
   })
+
+  it('should skip short "contains" identifiers (<4 chars) to avoid false positives', () => {
+    // Bug fix: high-lieferanten-matching-bug-2.md
+    // Short identifiers like "KRE" match too many false positives (Krefeld, Sekretär, etc.)
+    const text = 'Rechnung aus Krefeld, Sekretär hat KRE notiert'
+    const result = matchSupplierByIdentifiers(text, testIdentifiers)
+
+    // Should NOT match the short "KRE" identifier (id-007, sup-008)
+    // even though "KRE" appears in the text
+    expect(result?.supplier_id).not.toBe('sup-008')
+  })
+
+  it('should allow short identifiers with "equals" or "starts_with" operator', () => {
+    // Short identifiers are OK with strict operators
+    const shortEqualsIdentifiers = [
+      {
+        id: 'short-equals',
+        supplier_id: 'test-001',
+        identifier_type: 'code',
+        identifier_value: 'AB',
+        operator: 'equals' as const,
+        priority: 'hoch' as const,
+        is_active: true,
+        supplier: { id: 'test-001', name: 'Test Supplier' },
+      },
+    ]
+
+    const text = 'ab' // Exact match (lowercase normalizes)
+    const result = matchSupplierByIdentifiers(text, shortEqualsIdentifiers)
+
+    // Short identifier with "equals" should still work
+    expect(result?.supplier_id).toBe('test-001')
+  })
+
+  it('should allow longer "contains" identifiers (>=4 chars)', () => {
+    // Longer contains identifiers should work normally
+    const text = 'baeckerei-mueller.de'
+    const result = matchSupplierByIdentifiers(text, testIdentifiers)
+
+    // Should match the domain identifier (id-004, sup-004)
+    expect(result?.supplier_id).toBe('sup-004')
+    expect(result?.identifier_type).toBe('domain')
+  })
 })
 
 describe('isOnBlocklist', () => {
