@@ -201,21 +201,25 @@ export async function extractDocument(
     let usedLLM = false
     const needsLLM = shouldUseLLM(extractionResult)
 
-    if (needsLLM) {
-      const rawTextForLLM = extractionResult.raw_text || ''
-      console.log(`[ExtractDocument] Using LLM fallback, text length: ${rawTextForLLM.length}`)
+    // WICHTIG: raw_text vor LLM-Fallback speichern für späteres Identifier-Matching
+    const originalRawText = extractionResult.raw_text || ''
 
-      if (rawTextForLLM.length < 50) {
+    if (needsLLM) {
+      console.log(`[ExtractDocument] Using LLM fallback, text length: ${originalRawText.length}`)
+
+      if (originalRawText.length < 50) {
         extractionResult.warnings.push('LLM-Fallback uebersprungen: Kein extrahierbarer Text vorhanden')
       } else {
         try {
           const llmResult = await withTimeout(
-            extractWithLLM(rawTextForLLM),
+            extractWithLLM(originalRawText),
             LLM_TIMEOUT_MS,
             'Timeout: LLM-Verarbeitung dauerte zu lange'
           )
           if (llmResult) {
             extractionResult = convertLLMResult(llmResult, extractionResult.page_count)
+            // raw_text wiederherstellen für Identifier-Matching
+            extractionResult.raw_text = originalRawText
             usedLLM = true
           }
         } catch (llmError) {
