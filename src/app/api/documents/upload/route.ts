@@ -82,6 +82,39 @@ function checkRateLimit(userId: string): { allowed: boolean; retryAfter?: number
   return { allowed: true }
 }
 
+/**
+ * BUGFIX: Trigger extraction for a document after upload (for supplier recognition)
+ * This is an async fire-and-forget operation
+ */
+async function triggerExtractionForDocument(documentId: string): Promise<void> {
+  // Build URL for internal API call
+  let baseUrl: string
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    baseUrl = process.env.NEXT_PUBLIC_APP_URL
+  } else if (process.env.VERCEL_URL) {
+    baseUrl = `https://${process.env.VERCEL_URL}`
+  } else {
+    baseUrl = 'http://localhost:3000'
+  }
+
+  console.log(`[Upload] Triggering auto-extraction for document ${documentId}`)
+
+  const response = await fetch(`${baseUrl}/api/documents/${documentId}/extract`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-service-key': process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(`Auto-extraction failed: ${error.error || response.statusText}`)
+  }
+
+  console.log(`[Upload] Auto-extraction triggered successfully for document ${documentId}`)
+}
+
 // POST /api/documents/upload - Upload PDF documents
 export async function POST(request: NextRequest) {
   // Auth check
@@ -137,11 +170,13 @@ export async function POST(request: NextRequest) {
       supplier_id: string | null
       document_date: string | null
       document_number: string | null
+      auto_extract: boolean  // BUGFIX: Option to auto-trigger extraction for supplier recognition
     } = {
       type: 'invoice',
       supplier_id: null,
       document_date: null,
       document_number: null,
+      auto_extract: false,
     }
 
     if (metadataJson) {
@@ -163,6 +198,7 @@ export async function POST(request: NextRequest) {
           supplier_id: validation.data.supplier_id ?? null,
           document_date: validation.data.document_date ?? null,
           document_number: validation.data.document_number ?? null,
+          auto_extract: parsed.auto_extract === true,  // BUGFIX: Support auto_extract flag
         }
       } catch {
         return NextResponse.json(
@@ -326,6 +362,13 @@ export async function POST(request: NextRequest) {
           status: document.status,
           uploaded_at: document.uploaded_at,
         })
+
+        // BUGFIX: Auto-trigger extraction if requested (for supplier recognition)
+        if (metadata.auto_extract) {
+          triggerExtractionForDocument(document.id).catch(err => {
+            console.error(`[Upload] Auto-extraction failed for ${document.id}:`, err)
+          })
+        }
       } catch (err) {
         uploadErrors.push({
           filename: file.name,

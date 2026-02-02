@@ -52,11 +52,22 @@ export default function ImportSourcesPage() {
     },
   })
 
+  // Check if running on localhost
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  )
+
   // Scan mutation
   const scanMutation = useMutation({
-    mutationFn: async (sourceId: string) => {
-      setScanningId(sourceId)
-      const response = await fetch(`/api/import-sources/${sourceId}/scan`, {
+    mutationFn: async (source: ImportSource) => {
+      // Block local folder scans in production
+      if (source.type === 'local' && !isLocalhost) {
+        throw new Error('Lokaler Ordner-Scan nicht möglich. Diese Funktion ist nur verfügbar wenn die App lokal läuft (localhost).')
+      }
+
+      setScanningId(source.id)
+      const response = await fetch(`/api/import-sources/${source.id}/scan`, {
         method: 'POST',
       })
       if (!response.ok) {
@@ -70,7 +81,9 @@ export default function ImportSourcesPage() {
       toast.success(data.message || 'Scan gestartet')
     },
     onError: (error: Error) => {
-      toast.error(error.message)
+      toast.error('Scan fehlgeschlagen', {
+        description: error.message,
+      })
     },
     onSettled: () => {
       setScanningId(null)
@@ -185,7 +198,7 @@ export default function ImportSourcesPage() {
               source={source}
               onEdit={handleEdit}
               onViewLogs={setLogsSource}
-              onScan={(s) => scanMutation.mutate(s.id)}
+              onScan={(s) => scanMutation.mutate(s)}
               onToggleActive={(s, active) =>
                 toggleMutation.mutate({ id: s.id, is_active: active })
               }

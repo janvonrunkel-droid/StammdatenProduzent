@@ -395,12 +395,19 @@ async function createProcessedFileEntry(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   entry: ProcessedFileInsert
 ) {
-  const { error } = await supabase
+  console.log(`[ImportService] Creating processed_files entry for: ${entry.file_name}, status: ${entry.status}`)
+
+  const { data, error } = await supabase
     .from('processed_files')
     .insert(entry)
+    .select()
+    .single()
 
   if (error) {
-    console.error('[ImportService] Failed to create processed_files entry:', error)
+    console.error('[ImportService] Failed to create processed_files entry:', error.message, error.details, error.hint)
+    // Don't throw - this is a non-critical tracking entry
+  } else {
+    console.log(`[ImportService] Created processed_files entry: ${data?.id}`)
   }
 }
 
@@ -466,10 +473,18 @@ async function findSupplierFromPath(
  */
 async function triggerExtraction(documentId: string): Promise<void> {
   // Use internal fetch to call the extraction API
-  // Note: In a real deployment, this would be the full URL or use environment config
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
+  // Priority: NEXT_PUBLIC_APP_URL > VERCEL_URL > localhost
+  // BUG FIX: Fixed operator precedence issue that caused incorrect URL resolution
+  let baseUrl: string
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    baseUrl = process.env.NEXT_PUBLIC_APP_URL
+  } else if (process.env.VERCEL_URL) {
+    baseUrl = `https://${process.env.VERCEL_URL}`
+  } else {
+    baseUrl = 'http://localhost:3000'
+  }
+
+  console.log(`[ImportService] Triggering extraction for document ${documentId} via ${baseUrl}`)
 
   const response = await fetch(`${baseUrl}/api/documents/${documentId}/extract`, {
     method: 'POST',
@@ -482,8 +497,11 @@ async function triggerExtraction(documentId: string): Promise<void> {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+    console.error(`[ImportService] Extraction trigger failed for ${documentId}:`, error)
     throw new Error(`Extraction trigger failed: ${error.error || response.statusText}`)
   }
+
+  console.log(`[ImportService] Extraction triggered successfully for document ${documentId}`)
 }
 
 /**
