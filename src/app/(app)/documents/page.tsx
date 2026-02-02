@@ -112,6 +112,7 @@ export default function DocumentsPage() {
   // PROJ-16: Auto-create articles setting (per-document override)
   const [autoCreateArticles, setAutoCreateArticles] = useState<boolean>(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
 
   // Debounce search
   useEffect(() => {
@@ -139,6 +140,32 @@ export default function DocumentsPage() {
     }
     loadSettings()
   }, [])
+
+  // PROJ-16: Save auto-create articles setting to database
+  const handleAutoCreateToggle = async (checked: boolean) => {
+    setAutoCreateArticles(checked)
+    setIsSavingSettings(true)
+    try {
+      const response = await fetch('/api/settings/extraction', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraction_auto_create_articles: checked }),
+      })
+      if (response.ok) {
+        toast.success(checked ? 'Auto-Artikel aktiviert' : 'Auto-Artikel deaktiviert')
+      } else {
+        // Revert on error
+        setAutoCreateArticles(!checked)
+        toast.error('Einstellung konnte nicht gespeichert werden')
+      }
+    } catch {
+      // Revert on error
+      setAutoCreateArticles(!checked)
+      toast.error('Einstellung konnte nicht gespeichert werden')
+    } finally {
+      setIsSavingSettings(false)
+    }
+  }
 
   // Fetch suppliers for filter/upload dialogs
   const { data: suppliersData } = useQuery<SuppliersResponse>({
@@ -596,7 +623,8 @@ export default function DocumentsPage() {
                     <Checkbox
                       id="auto-create-articles"
                       checked={autoCreateArticles}
-                      onCheckedChange={(checked) => setAutoCreateArticles(checked === true)}
+                      disabled={isSavingSettings}
+                      onCheckedChange={(checked) => handleAutoCreateToggle(checked === true)}
                     />
                     <Label
                       htmlFor="auto-create-articles"
