@@ -60,104 +60,68 @@ export async function GET(request: NextRequest) {
       return exclusionSet.has(key)
     }
 
-    // Find article duplicates using pg_trgm
+    // Find article duplicates using optimized RPC (single query instead of N+1)
     if (!entityType || entityType === 'article') {
-      const { data: articles, error: articlesError } = await supabaseAdmin
-        .from('articles')
-        .select('id, name, article_number')
-        .is('deleted_at', null)
-        .order('name')
-        .limit(200) // Limit for performance
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: articlePairs, error: articlesError } = await (supabaseAdmin.rpc as any)(
+        'find_similar_articles',
+        { p_threshold: threshold, p_limit: limit }
+      )
 
-      if (!articlesError && articles && articles.length > 1) {
-        // Compare each pair using similarity function
-        for (let i = 0; i < articles.length && duplicates.length < limit; i++) {
-          for (let j = i + 1; j < articles.length && duplicates.length < limit; j++) {
-            const a = articles[i]
-            const b = articles[j]
+      if (!articlesError && articlePairs) {
+        for (const pair of articlePairs) {
+          // Skip if excluded
+          if (isExcluded('article', pair.id_a, pair.id_b)) continue
 
-            // Skip if excluded
-            if (isExcluded('article', a.id, b.id)) continue
-
-            // Calculate similarity using pg_trgm via RPC
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: simResult } = await (supabaseAdmin.rpc as any)('get_similarity', {
-              text1: a.name,
-              text2: b.name,
-            })
-
-            const similarity = simResult || 0
-
-            if (similarity >= threshold) {
-              duplicates.push({
-                id: `article:${a.id}:${b.id}`,
-                entity_type: 'article',
-                entity_a: {
-                  id: a.id,
-                  name: a.name,
-                  extra: a.article_number || undefined,
-                },
-                entity_b: {
-                  id: b.id,
-                  name: b.name,
-                  extra: b.article_number || undefined,
-                },
-                similarity,
-                matching_fields: ['name'],
-              })
-            }
-          }
+          duplicates.push({
+            id: `article:${pair.id_a}:${pair.id_b}`,
+            entity_type: 'article',
+            entity_a: {
+              id: pair.id_a,
+              name: pair.name_a,
+              extra: pair.extra_a || undefined,
+            },
+            entity_b: {
+              id: pair.id_b,
+              name: pair.name_b,
+              extra: pair.extra_b || undefined,
+            },
+            similarity: pair.similarity,
+            matching_fields: ['name'],
+          })
         }
       }
     }
 
-    // Find supplier duplicates using pg_trgm
+    // Find supplier duplicates using optimized RPC (single query instead of N+1)
     if (!entityType || entityType === 'supplier') {
-      const { data: suppliers, error: suppliersError } = await supabaseAdmin
-        .from('suppliers')
-        .select('id, name, address')
-        .is('deleted_at', null)
-        .order('name')
-        .limit(200) // Limit for performance
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: supplierPairs, error: suppliersError } = await (supabaseAdmin.rpc as any)(
+        'find_similar_suppliers',
+        { p_threshold: threshold, p_limit: limit }
+      )
 
-      if (!suppliersError && suppliers && suppliers.length > 1) {
-        // Compare each pair using similarity function
-        for (let i = 0; i < suppliers.length && duplicates.length < limit; i++) {
-          for (let j = i + 1; j < suppliers.length && duplicates.length < limit; j++) {
-            const a = suppliers[i]
-            const b = suppliers[j]
+      if (!suppliersError && supplierPairs) {
+        for (const pair of supplierPairs) {
+          // Skip if excluded
+          if (isExcluded('supplier', pair.id_a, pair.id_b)) continue
 
-            // Skip if excluded
-            if (isExcluded('supplier', a.id, b.id)) continue
-
-            // Calculate similarity using pg_trgm via RPC
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: simResult } = await (supabaseAdmin.rpc as any)('get_similarity', {
-              text1: a.name,
-              text2: b.name,
-            })
-
-            const similarity = simResult || 0
-
-            if (similarity >= threshold) {
-              duplicates.push({
-                id: `supplier:${a.id}:${b.id}`,
-                entity_type: 'supplier',
-                entity_a: {
-                  id: a.id,
-                  name: a.name,
-                  extra: a.address?.split('\n')[0] || undefined, // First line of address
-                },
-                entity_b: {
-                  id: b.id,
-                  name: b.name,
-                  extra: b.address?.split('\n')[0] || undefined,
-                },
-                similarity,
-                matching_fields: ['name'],
-              })
-            }
-          }
+          duplicates.push({
+            id: `supplier:${pair.id_a}:${pair.id_b}`,
+            entity_type: 'supplier',
+            entity_a: {
+              id: pair.id_a,
+              name: pair.name_a,
+              extra: pair.extra_a || undefined,
+            },
+            entity_b: {
+              id: pair.id_b,
+              name: pair.name_b,
+              extra: pair.extra_b || undefined,
+            },
+            similarity: pair.similarity,
+            matching_fields: ['name'],
+          })
         }
       }
     }

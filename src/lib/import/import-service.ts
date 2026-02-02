@@ -478,10 +478,13 @@ async function findSupplierFromPath(
 /**
  * Trigger extraction for a document (calls internal API)
  * Uses a timeout to prevent blocking the import process for too long.
+ * Includes retry logic for transient failures.
  * Note: The extract endpoint runs in its own serverless function, so even if
  * we timeout here, the extraction will continue running on the server.
  */
-async function triggerExtraction(documentId: string): Promise<void> {
+async function triggerExtraction(documentId: string, retryCount = 0): Promise<void> {
+  const MAX_RETRIES = 2
+  const RETRY_DELAY_MS = 2000 // 2 seconds between retries
   // Timeout for the trigger request (30 seconds)
   // This is just for our wait - the actual extraction continues on the server
   const TRIGGER_TIMEOUT_MS = 30 * 1000
@@ -497,14 +500,18 @@ async function triggerExtraction(documentId: string): Promise<void> {
     baseUrl = 'http://localhost:3000'
   }
 
-  console.log(`[ImportService] Triggering extraction for document ${documentId} via ${baseUrl}`)
+  const extractUrl = `${baseUrl}/api/documents/${documentId}/extract`
+  console.log(`[ImportService] Triggering extraction for document ${documentId}`)
+  console.log(`[ImportService] - URL: ${extractUrl}`)
+  console.log(`[ImportService] - Attempt: ${retryCount + 1}/${MAX_RETRIES + 1}`)
+  console.log(`[ImportService] - Service key present: ${!!supabaseServiceKey}`)
 
   // Create an AbortController for timeout
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), TRIGGER_TIMEOUT_MS)
 
   try {
-    const response = await fetch(`${baseUrl}/api/documents/${documentId}/extract`, {
+    const response = await fetch(extractUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -516,13 +523,25 @@ async function triggerExtraction(documentId: string): Promise<void> {
 
     clearTimeout(timeoutId)
 
+    console.log(`[ImportService] Extraction response status: ${response.status} ${response.statusText}`)
+
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      console.error(`[ImportService] Extraction trigger failed for ${documentId}:`, error)
-      throw new Error(`Extraction trigger failed: ${error.error || response.statusText}`)
+      const errorBody = await response.text().catch(() => 'Could not read response body')
+      console.error(`[ImportService] Extraction trigger failed for ${documentId}:`)
+      console.error(`[ImportService] - Status: ${response.status}`)
+      console.error(`[ImportService] - Body: ${errorBody}`)
+
+      // Retry on 5xx errors or network issues
+      if (response.status >= 500 && retryCount < MAX_RETRIES) {
+        console.log(`[ImportService] Retrying extraction in ${RETRY_DELAY_MS}ms...`)
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+        return triggerExtraction(documentId, retryCount + 1)
+      }
+
+      throw new Error(`Extraction trigger failed: ${response.status} ${response.statusText}`)
     }
 
-    console.log(`[ImportService] Extraction completed for document ${documentId}`)
+    console.log(`[ImportService] Extraction completed successfully for document ${documentId}`)
   } catch (err) {
     clearTimeout(timeoutId)
 
@@ -533,6 +552,15 @@ async function triggerExtraction(documentId: string): Promise<void> {
       return // Don't throw - this is expected behavior
     }
 
+    // Retry on network errors
+    if (retryCount < MAX_RETRIES) {
+      console.log(`[ImportService] Network error, retrying extraction in ${RETRY_DELAY_MS}ms...`)
+      console.error(`[ImportService] Error details:`, err)
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+      return triggerExtraction(documentId, retryCount + 1)
+    }
+
+    console.error(`[ImportService] Extraction failed after ${MAX_RETRIES + 1} attempts:`, err)
     throw err
   }
 }
