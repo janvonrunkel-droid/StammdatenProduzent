@@ -19,7 +19,8 @@ SET
     operator = 'starts_with'
 WHERE identifier_value = 'KRE'
   AND identifier_type = 'rechnungsnummer'
-  AND supplier_id = (SELECT id FROM suppliers WHERE name = 'Bauen und Leben');
+  AND supplier_id = (SELECT id FROM suppliers WHERE name ILIKE 'Bauen und Leben');
+-- Note: ILIKE für case-insensitive Match (DB hat 'Bauen und leben' mit kleinem 'l')
 
 -- Zusätzlich: Füge einen Kommentar/Note für zukünftige Referenz hinzu
 -- (Supabase unterstützt keine Kommentare auf Row-Ebene, daher nur in der Migration dokumentiert)

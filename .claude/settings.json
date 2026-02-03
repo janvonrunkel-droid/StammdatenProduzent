@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npx tsc:*)",
       "mcp__supabase__search_docs",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(PLAYWRIGHT_BASE_URL=https://stammdaten-produzent.vercel.app npx playwright test:*)"
     ]
   }
 }

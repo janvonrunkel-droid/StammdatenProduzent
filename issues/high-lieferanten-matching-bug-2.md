@@ -99,3 +99,4 @@ Keine Fehlermeldung - stille Fehler
 | 2026-02-02 | Backend Developer | **Fix 1 (Migration)**: `20260202_fix_kre_identifier.sql` - Ändert "KRE" zu "KRE " mit operator "starts_with" |
 | 2026-02-02 | Backend Developer | **Fix 2 (Code)**: `MIN_CONTAINS_IDENTIFIER_LENGTH = 4` in supplier-matcher.ts - Kurze contains-Identifier werden übersprungen und geloggt |
 | 2026-02-02 | Backend Developer | **Tests**: 4 neue Unit Tests für short identifier handling |
+| 2026-02-02 | Issue Triage | **Regression**: Migration griff nicht - `WHERE name = 'Bauen und Leben'` matched nicht weil DB `'Bauen und leben'` hat (Case-Sensitivity). Fix manuell via SQL angewandt. Migration auf `ILIKE` korrigiert. |

@@ -109,8 +109,8 @@ test.describe('Settings Page', () => {
     test('should navigate to import sources page', async ({ page }) => {
       await settingsPage.goToImportSources()
 
-      // Should be on the import sources page
-      await expect(page.getByRole('heading', { name: /Import-Quellen/i })).toBeVisible()
+      // Should be on the import sources page (heading is "Auto-Import Einstellungen")
+      await expect(page.getByRole('heading', { name: /Auto-Import/i })).toBeVisible()
     })
   })
 
