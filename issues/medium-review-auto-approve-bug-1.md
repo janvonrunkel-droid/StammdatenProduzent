@@ -1,7 +1,7 @@
 # Bug: Alle Rechnungen landen im Review (auch korrekt extrahierte)
 
 ## Meta
-- **Status:** Reported
+- **Status:** Fixed
 - **Kategorie:** API/Backend
 - **Priorität:** Medium
 - **Feature:** PROJ-6 Auto-Review System

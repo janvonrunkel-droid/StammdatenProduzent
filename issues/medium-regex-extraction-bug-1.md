@@ -1,7 +1,7 @@
 # Bug: Regex-Extraktion liefert fehlerhafte Ergebnisse
 
 ## Meta
-- **Status:** Reported
+- **Status:** Fixed
 - **Kategorie:** API/Backend
 - **Priorität:** Medium
 - **Feature:** PROJ-5 PDF Extraktion

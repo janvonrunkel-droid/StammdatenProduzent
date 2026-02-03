@@ -1,7 +1,7 @@
 # Bug: Auto-Extraktion funktioniert weiterhin nicht (Regression?)
 
 ## Meta
-- **Status:** Reported
+- **Status:** Fixed
 - **Kategorie:** API/Backend
 - **Priorität:** High
 - **Feature:** PROJ-5 PDF Extraktion / PROJ-12 Auto-Import
