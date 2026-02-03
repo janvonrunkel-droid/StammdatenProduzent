@@ -12,6 +12,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createFileSystemAdapter, type FileInfo } from './file-system-adapter'
 import type { ImportSource, ProcessedFileInsert, Json } from '@/lib/database.types'
+import { extractDocument } from '@/lib/extraction/extract-document'
 
 // Initialize Supabase client with service role key for server-side operations
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -344,8 +345,26 @@ async function processFile(
 
     console.log(`[ImportService] Successfully processed: ${file.name} -> document ${documentId}`)
 
-    // Note: Extraction is now handled by cron job (processPendingDocuments)
-    // No HTTP trigger needed - documents stay pending until cron picks them up
+    // BUGFIX: Trigger extraction immediately after import (not waiting for cron job)
+    // This ensures documents are extracted right away instead of staying "pending"
+    try {
+      console.log(`[ImportService] Triggering extraction for document ${documentId}`)
+      const extractionResult = await extractDocument({
+        documentId,
+        pdfBuffer: fileBuffer,
+        supabase,
+      })
+
+      if (extractionResult.success) {
+        console.log(`[ImportService] Extraction completed for ${documentId}: ${extractionResult.status}, confidence: ${extractionResult.confidenceScore}`)
+      } else {
+        console.warn(`[ImportService] Extraction failed for ${documentId}: ${extractionResult.error}`)
+      }
+    } catch (extractError) {
+      console.error(`[ImportService] Extraction error for ${documentId}:`, extractError)
+      // Don't fail the import if extraction fails - document is still created
+      // It can be extracted manually or by the cron job later
+    }
 
     return {
       success: true,

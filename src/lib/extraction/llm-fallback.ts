@@ -205,33 +205,14 @@ export function convertLLMResult(
 
 /**
  * Check if LLM extraction should be used
- * Returns true if regex extraction has poor results
+ *
+ * BUGFIX: Always return true to disable regex extraction
+ * User feedback: "Wenn mit Regex extrahiert wird, dann kommt nur Müll raus.
+ * Ich denke wir sollten das lassen und nur noch mit LLM extrahieren."
+ *
+ * LLM extraction is more reliable across different PDF formats.
  */
-export function shouldUseLLM(regexResult: ExtractionResult): boolean {
-  // Use LLM if:
-  // 1. No positions found
-  if (regexResult.positions.length === 0) {
-    return true
-  }
-
-  // 2. Low average confidence on positions
-  const avgConfidence = regexResult.positions.reduce((sum, p) => sum + p.confidence, 0) / regexResult.positions.length
-  if (avgConfidence < 0.6) {
-    return true
-  }
-
-  // 3. Too many positions with missing prices
-  const positionsWithoutPrice = regexResult.positions.filter(
-    p => p.price_per_unit === null && p.total_price === null
-  )
-  if (positionsWithoutPrice.length > regexResult.positions.length * 0.5) {
-    return true
-  }
-
-  // 4. No totals found
-  if (!regexResult.totals.total && !regexResult.totals.subtotal) {
-    return true
-  }
-
-  return false
+export function shouldUseLLM(_regexResult: ExtractionResult): boolean {
+  // BUGFIX: Always use LLM - regex extraction produces unreliable results
+  return true
 }

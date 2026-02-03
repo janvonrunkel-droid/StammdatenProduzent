@@ -45,7 +45,10 @@ const EXTRACTION_TIMEOUT_MS = 5 * 60 * 1000
 const LLM_TIMEOUT_MS = 30 * 1000
 
 // Thresholds
-const AUTO_APPROVE_THRESHOLD = 0.9
+// BUGFIX: Lowered from 0.9 to allow more auto-approvals
+// User feedback: "Was mich auch stört ist, dass alle Rechnungen nach der Extraktion im Review landen"
+const AUTO_APPROVE_THRESHOLD = 0.85
+const AUTO_APPROVE_HIGH_CONFIDENCE = 0.95  // Very high confidence = auto-approve without requiring all articles matched
 const SUPPLIER_ASSIGNMENT_THRESHOLD = 0.75
 
 export interface ExtractDocumentOptions {
@@ -466,8 +469,26 @@ export async function extractDocument(
     // 6. Calculate confidence and status
     const confidenceScore = calculateConfidenceScore(extractionResult)
     const allPositionsMatched = articleMatchResults.length > 0 ? areAllPositionsMatched(articleMatchResults) : false
-    const canAutoApprove = confidenceScore >= AUTO_APPROVE_THRESHOLD && allPositionsMatched
+
+    // BUGFIX: Relaxed auto-approve logic to reduce manual review burden
+    // User feedback: "alle Rechnungen nach der Extraktion im Review landen"
+    // Auto-approve conditions (any of these):
+    // 1. Very high confidence (>= 0.95) - trust the extraction regardless of article matching
+    // 2. High confidence (>= 0.85) + supplier matched - known supplier with good extraction
+    // 3. High confidence (>= 0.85) + all positions matched - all articles identified
+    const hasHighConfidence = confidenceScore >= AUTO_APPROVE_THRESHOLD
+    const hasVeryHighConfidence = confidenceScore >= AUTO_APPROVE_HIGH_CONFIDENCE
+    const hasMatchedSupplier = matchedSupplierId !== null
+
+    const canAutoApprove =
+      hasVeryHighConfidence ||
+      (hasHighConfidence && hasMatchedSupplier) ||
+      (hasHighConfidence && allPositionsMatched)
+
     const extractionStatus = canAutoApprove ? 'approved' : 'pending_review'
+
+    // Log auto-approve decision for debugging
+    console.log(`[ExtractDocument] Auto-approve decision: confidence=${confidenceScore.toFixed(2)}, supplier=${hasMatchedSupplier}, allMatched=${allPositionsMatched}, approved=${canAutoApprove}`)
 
     // 7. Build raw_data
     const rawData = {
