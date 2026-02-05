@@ -243,15 +243,23 @@ async function retrieveRelevantData(
   intent: Intent
 ): Promise<RetrievedData> {
   // Special handling for "list all articles" type queries
+  const messageLower = message.toLowerCase()
   const isListAllQuery =
     (intent.type === 'article_search' || intent.type === 'general_info') &&
     intent.entities.article_names.length === 0 &&
-    (message.toLowerCase().includes('alle artikel') ||
-     message.toLowerCase().includes('welche artikel') ||
-     message.toLowerCase().includes('artikel haben wir') ||
-     message.toLowerCase().includes('artikelliste') ||
-     message.toLowerCase().includes('zeig mir') ||
-     message.toLowerCase().includes('übersicht'))
+    (messageLower.includes('alle artikel') ||
+     messageLower.includes('welche artikel') ||
+     messageLower.includes('artikel haben wir') ||
+     messageLower.includes('artikelliste') ||
+     messageLower.includes('zeig mir') ||
+     messageLower.includes('übersicht') ||
+     messageLower.includes('wie viele') ||
+     messageLower.includes('wieviele') ||
+     messageLower.includes('anzahl') ||
+     messageLower.includes('bestand') ||
+     messageLower.includes('im system') ||
+     messageLower.includes('in der datenbank') ||
+     messageLower.includes('zugriff'))
 
   if (isListAllQuery) {
     // Return all articles when user asks for a list

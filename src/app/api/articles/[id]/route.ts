@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/supabase'
 import { updateArticleSchema } from '@/lib/validations/article'
+import { generateArticleEmbedding, formatEmbeddingForPostgres } from '@/lib/embeddings/service'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -93,10 +94,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const input = validationResult.data
 
-  // Check if article exists
+  // Check if article exists (fetch fields needed for embedding comparison)
   const { data: existing, error: fetchError } = await supabase
     .from('articles')
-    .select('id, article_number')
+    .select('id, name, description, article_number')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -174,6 +175,36 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         console.error('Supabase tag error:', tagError)
       }
     }
+  }
+
+  // Regenerate embedding if relevant fields changed (name, description, article_number)
+  const embeddingFieldsChanged =
+    (input.name !== undefined && input.name !== existing.name) ||
+    (input.description !== undefined && input.description !== existing.description) ||
+    (input.article_number !== undefined && input.article_number !== existing.article_number)
+
+  if (embeddingFieldsChanged) {
+    // Use updated values or fall back to existing
+    const articleData = {
+      id,
+      name: input.name ?? existing.name,
+      description: input.description ?? existing.description,
+      article_number: input.article_number ?? existing.article_number,
+    }
+
+    // Generate embedding async, don't block response
+    generateArticleEmbedding(articleData).then(async (result) => {
+      const { error: embeddingError } = await supabase
+        .from('articles')
+        .update({ embedding: formatEmbeddingForPostgres(result.embedding) })
+        .eq('id', id)
+
+      if (embeddingError) {
+        console.error('Failed to save article embedding:', embeddingError)
+      }
+    }).catch((err) => {
+      console.error('Failed to generate article embedding:', err)
+    })
   }
 
   // Fetch updated article

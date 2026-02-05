@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/supabase'
 import { createArticleSchema, articleQuerySchema } from '@/lib/validations/article'
 import { escapePostgrestValue } from '@/lib/utils'
+import { generateArticleEmbedding, formatEmbeddingForPostgres } from '@/lib/embeddings/service'
 
 // GET /api/articles - List articles with pagination, search, filters, sort
 export async function GET(request: NextRequest) {
@@ -508,6 +509,25 @@ export async function POST(request: NextRequest) {
       // Don't fail the whole request, just log
     }
   }
+
+  // Generate embedding for RAG search (async, don't block response)
+  generateArticleEmbedding({
+    id: article.id,
+    name: article.name,
+    description: input.description,
+    article_number: input.article_number,
+  }).then(async (result) => {
+    const { error: embeddingError } = await supabase
+      .from('articles')
+      .update({ embedding: formatEmbeddingForPostgres(result.embedding) })
+      .eq('id', article.id)
+
+    if (embeddingError) {
+      console.error('Failed to save article embedding:', embeddingError)
+    }
+  }).catch((err) => {
+    console.error('Failed to generate article embedding:', err)
+  })
 
   // Fetch article with tags
   const { data: fullArticle } = await supabase
