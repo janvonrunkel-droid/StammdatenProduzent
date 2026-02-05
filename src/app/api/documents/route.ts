@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/supabase'
 import { documentQuerySchema } from '@/lib/validations/document'
-
-// Helper function to escape special characters in PostgREST filter values
-// BUG-SEC-3 Fix: Sanitize search parameter to prevent filter injection
-function escapePostgrestValue(value: string): string {
-  // Escape characters that have special meaning in PostgREST filters
-  return value
-    .replace(/\\/g, '\\\\')  // Escape backslashes first
-    .replace(/,/g, '\\,')    // Escape commas (used as OR separator)
-    .replace(/\./g, '\\.')   // Escape dots (used as operator separator)
-    .replace(/\(/g, '\\(')   // Escape parentheses
-    .replace(/\)/g, '\\)')
-    .replace(/%/g, '\\%')    // Escape percent (wildcard)
-    .replace(/_/g, '\\_')    // Escape underscore (single char wildcard)
-}
+import { escapePostgrestValue } from '@/lib/utils'
 
 // GET /api/documents - List documents with pagination, search, filters, sort
 export async function GET(request: NextRequest) {

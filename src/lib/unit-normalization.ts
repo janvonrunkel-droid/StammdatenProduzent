@@ -163,32 +163,3 @@ export function normalizeUnit(input: string | null | undefined): string | null {
   // No mapping found, return original
   return trimmed
 }
-
-/**
- * Get the original unit alongside its normalized form
- * @param input The raw unit string from extraction
- * @returns Object with original and normalized values
- */
-export function getNormalizedUnitInfo(input: string | null | undefined): {
-  original: string | null
-  normalized: string | null
-  wasNormalized: boolean
-} {
-  if (!input) {
-    return { original: null, normalized: null, wasNormalized: false }
-  }
-
-  const normalized = normalizeUnit(input)
-  return {
-    original: input.trim(),
-    normalized,
-    wasNormalized: normalized !== input.trim(),
-  }
-}
-
-/**
- * Get all standard unit abbreviations
- */
-export function getStandardUnits(): string[] {
-  return [...new Set(Object.values(UNIT_MAPPINGS))]
-}

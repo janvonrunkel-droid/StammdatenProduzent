@@ -119,14 +119,6 @@ export function formatEmbeddingForPostgres(embedding: number[]): string {
   return `[${embedding.join(',')}]`
 }
 
-/**
- * Parse PostgreSQL vector string to number array
- */
-export function parsePostgresEmbedding(vectorString: string): number[] {
-  const cleaned = vectorString.replace('[', '').replace(']', '')
-  return cleaned.split(',').map(Number)
-}
-
 // ============================================================================
 // Embedding Dimension & Model Info
 // ============================================================================
