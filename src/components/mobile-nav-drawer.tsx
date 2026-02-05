@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, Users, Package, Settings } from 'lucide-react'
+import { Home, FileText, Users, Package, Settings, X } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -51,7 +51,7 @@ export function MobileNavDrawer({ open, onOpenChange }: MobileNavDrawerProps) {
 
         <div className="flex h-full flex-col">
           {/* Header */}
-          <div className="flex h-14 items-center border-b px-4">
+          <div className="flex h-14 items-center justify-between border-b px-4">
             <Link
               href="/dashboard"
               onClick={handleNavigation}
@@ -59,6 +59,13 @@ export function MobileNavDrawer({ open, onOpenChange }: MobileNavDrawerProps) {
             >
               Stammdaten Produzent
             </Link>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              aria-label="Schließen"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
           {/* Main Navigation */}
