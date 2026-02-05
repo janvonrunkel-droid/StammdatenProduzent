@@ -108,8 +108,11 @@ function extractKeywords(message: string): string[] {
     .replace(/\s+/g, ' ')
     .trim()
 
+  // Known short keywords that should not be filtered (product codes, abbreviations)
+  const shortKeywords = new Set(['kg', 'dn', 'pe', 'pp', 'pvc', 'ht', 'zl'])
+
   const words = cleaned.split(' ')
-    .filter(word => word.length > 2)
+    .filter(word => word.length > 2 || shortKeywords.has(word))
     .filter(word => !stopWords.has(word))
 
   return [...new Set(words)]
@@ -244,15 +247,22 @@ async function retrieveRelevantData(
   intent: Intent
 ): Promise<RetrievedData> {
   // Handle "list all articles" queries
+  // IMPORTANT: Be specific! "zeig mir" alone should NOT trigger this,
+  // only phrases that clearly ask for ALL articles
+  const lowerMessage = message.toLowerCase()
   const isListAllQuery =
     (intent.type === 'article_search' || intent.type === 'general_info') &&
     intent.entities.article_names.length === 0 &&
-    (message.toLowerCase().includes('alle artikel') ||
-     message.toLowerCase().includes('welche artikel') ||
-     message.toLowerCase().includes('artikel haben wir') ||
-     message.toLowerCase().includes('artikelliste') ||
-     message.toLowerCase().includes('zeig mir') ||
-     message.toLowerCase().includes('übersicht'))
+    (lowerMessage.includes('alle artikel') ||
+     lowerMessage.includes('welche artikel') ||
+     lowerMessage.includes('artikel haben wir') ||
+     lowerMessage.includes('artikelliste') ||
+     lowerMessage.includes('zeig mir alle') ||
+     lowerMessage.includes('alle sehen') ||
+     lowerMessage.includes('möchte alle') ||
+     lowerMessage.includes('liste aller') ||
+     lowerMessage.includes('artikelübersicht') ||
+     (lowerMessage.includes('übersicht') && lowerMessage.includes('artikel')))
 
   if (isListAllQuery) {
     const { data: allArticles, error } = await supabase
@@ -597,22 +607,29 @@ function generateActions(
       break
 
     case 'article_search':
-      // Show search link for more results
-      if (hasArticles) {
-        const searchQuery = intent.entities.article_names[0] || userMessage.substring(0, 30)
+      // If a specific article was found, link to it first (most relevant action)
+      if (firstArticle) {
         actions.push({
-          label: 'Suchergebnisse anzeigen',
-          icon: '🔍',
+          label: 'Artikel-Details',
+          icon: '📋',
           type: 'link',
-          url: `/articles?q=${encodeURIComponent(searchQuery)}`,
+          url: `/articles/${firstArticle.id}`,
         })
-        // If a specific article was found, link to it
-        if (firstArticle) {
+      }
+      // Show search link for more results - use the name of the first found article
+      // This ensures the search query matches what we actually found
+      if (hasArticles && retrievedData.articles.length > 1) {
+        // Use the first article's name as search query - this is what we actually found
+        const searchQuery = firstArticle?.name?.split(' ').slice(0, 3).join(' ') ||
+                          intent.entities.article_names[0] ||
+                          retrievedData.query_keywords[0] ||
+                          ''
+        if (searchQuery) {
           actions.push({
-            label: 'Artikel-Details',
-            icon: '📋',
+            label: 'Weitere Suchergebnisse',
+            icon: '🔍',
             type: 'link',
-            url: `/articles/${firstArticle.id}`,
+            url: `/articles?q=${encodeURIComponent(searchQuery)}`,
           })
         }
       }
@@ -736,14 +753,39 @@ export async function POST(request: NextRequest) {
     const assistantMessageId = crypto.randomUUID()
 
     // Prepare sources metadata for response headers
-    const sources = retrievedData.prices.slice(0, 5).map(p => ({
-      type: 'price',
-      article_name: p.article_name,
-      supplier_name: p.supplier_name,
-      price: p.price_per_unit,
-      date: p.price_date,
-      document_number: p.document_number,
-    }))
+    // IMPORTANT: Sources should be based on FOUND ARTICLES, not just prices
+    // SIMPLE APPROACH: Show top articles by score, same order as LLM sees them
+    // The articles are already sorted by relevance from the hybrid search
+    // Just take the top N - no complicated filtering that causes more problems than it solves
+    const MAX_SOURCES = 5
+
+    // Articles are already sorted by score from hybrid search
+    // Just log for debugging and take top N
+    retrievedData.articles.slice(0, 10).forEach((article, i) => {
+      const score = (article.keyword_score || 0) + (article.semantic_score || 0)
+      console.log(`[Sources] #${i + 1} ${article.name.substring(0, 35).padEnd(35)} | score: ${score.toFixed(2)} | ${i < MAX_SOURCES ? 'INCLUDE' : 'skip'}`)
+    })
+
+    const relevantArticles = retrievedData.articles.slice(0, MAX_SOURCES)
+
+    const sources = relevantArticles.slice(0, 5).map(article => {
+      // Find the best price for this article (if any)
+      const articlePrices = retrievedData.prices.filter(p => p.article_id === article.id)
+      const bestPrice = articlePrices.length > 0
+        ? articlePrices.reduce((min, p) => p.price_per_unit < min.price_per_unit ? p : min, articlePrices[0])
+        : null
+
+      return {
+        type: 'article',
+        article_id: article.id,
+        article_name: article.name,
+        article_number: article.article_number,
+        supplier_name: bestPrice?.supplier_name || null,
+        price: bestPrice?.price_per_unit || null,
+        date: bestPrice?.price_date || null,
+        document_number: bestPrice?.document_number || null,
+      }
+    })
 
     // Generate action buttons based on intent and retrieved data
     const actions = generateActions(intent, retrievedData, message)
@@ -786,7 +828,8 @@ export async function POST(request: NextRequest) {
     response.headers.set('X-Chat-Session-Id', finalSessionId || '')
     response.headers.set('X-Chat-Message-Id', assistantMessageId)
     response.headers.set('X-Chat-Intent', intent.type)
-    response.headers.set('X-Chat-Sources', JSON.stringify(sources))
+    // Base64-encode sources to handle UTF-8 characters (Umlaute) in HTTP headers
+    response.headers.set('X-Chat-Sources', Buffer.from(JSON.stringify(sources)).toString('base64'))
     // Base64-encode actions to avoid ByteString error from emoji icons
     response.headers.set('X-Chat-Actions', Buffer.from(JSON.stringify(actions)).toString('base64'))
     response.headers.set('X-Chat-Articles-Found', String(retrievedData.articles.length))

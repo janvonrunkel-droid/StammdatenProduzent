@@ -22,10 +22,12 @@ export interface ChatMessage {
   metadata?: {
     sources?: Array<{
       type: string
+      article_id?: string
       article_name: string
-      supplier_name: string
-      price: number
-      date: string
+      article_number?: string | null
+      supplier_name: string | null
+      price: number | null
+      date: string | null
       document_number?: string | null
     }>
     actions?: ChatAction[]

@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { ChatMessage as ChatMessageType, ChatAction } from './chat-context'
+import type { ChatMessage as ChatMessageType } from './chat-context'
 
 // ============================================================================
 // Props
@@ -118,52 +118,37 @@ export const ChatMessage = memo(function ChatMessage({ message }: ChatMessagePro
           )}
         </div>
 
-        {/* Sources */}
-        {!isUser && message.metadata?.sources && message.metadata.sources.length > 0 && (
+        {/* Found articles - clickable links to article detail pages */}
+        {!isUser && !message.isStreaming && message.metadata?.sources && message.metadata.sources.length > 0 && (
           <div className="pt-2 space-y-2">
-            <p className="text-xs text-muted-foreground font-medium">Quellen:</p>
+            <p className="text-xs text-muted-foreground font-medium">Gefundene Artikel:</p>
             <div className="flex flex-wrap gap-1">
               {message.metadata.sources.map((source, index) => (
-                <Badge
+                <Link
                   key={index}
-                  variant="outline"
-                  className="text-xs font-normal"
+                  href={source.article_id ? `/articles/${source.article_id}` : '/articles'}
                 >
-                  {source.article_name} - {source.supplier_name}: {source.price.toFixed(2)} €
-                </Badge>
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal cursor-pointer hover:bg-muted transition-colors"
+                  >
+                    {source.article_name}
+                    {source.article_number && ` (${source.article_number})`}
+                    {source.price != null && source.supplier_name && (
+                      <span className="ml-1 text-muted-foreground">
+                        - {source.supplier_name}: {source.price.toFixed(2)} EUR
+                      </span>
+                    )}
+                  </Badge>
+                </Link>
               ))}
             </div>
           </div>
         )}
 
-        {/* Action Buttons */}
-        {!isUser && !message.isStreaming && message.metadata?.actions && message.metadata.actions.length > 0 && (
-          <div className="pt-3 flex flex-wrap gap-2">
-            {message.metadata.actions.map((action, index) => (
-              <ActionButton key={index} action={action} />
-            ))}
-          </div>
-        )}
+        {/* Action Buttons removed - users can click directly on found articles above */}
       </div>
     </div>
   )
 })
 
-// ============================================================================
-// Action Button Component
-// ============================================================================
-function ActionButton({ action }: { action: ChatAction }) {
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="h-8 text-xs gap-1.5"
-      asChild
-    >
-      <Link href={action.url}>
-        <span>{action.icon}</span>
-        <span>{action.label}</span>
-      </Link>
-    </Button>
-  )
-}

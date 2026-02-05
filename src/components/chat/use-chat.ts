@@ -142,11 +142,22 @@ export function useChat() {
 
       let sources: ChatSource[] = []
       let actions: ChatAction[] = []
+
+      // Helper function to decode Base64 UTF-8 headers
+      const decodeBase64Utf8 = (base64: string): string => {
+        const binaryString = atob(base64)
+        const bytes = Uint8Array.from(binaryString, char => char.charCodeAt(0))
+        return new TextDecoder('utf-8').decode(bytes)
+      }
+
+      // Parse sources from headers (Base64-encoded to handle UTF-8 Umlaute)
       try {
         if (sourcesHeader) {
-          sources = JSON.parse(sourcesHeader)
+          const decoded = decodeBase64Utf8(sourcesHeader)
+          sources = JSON.parse(decoded)
         }
-      } catch {
+      } catch (e) {
+        console.warn('Failed to parse chat sources:', e)
         // Ignore parse errors for sources
       }
 
@@ -154,10 +165,11 @@ export function useChat() {
       const actionsHeader = response.headers.get('X-Chat-Actions')
       try {
         if (actionsHeader) {
-          const decoded = atob(actionsHeader)
+          const decoded = decodeBase64Utf8(actionsHeader)
           actions = JSON.parse(decoded)
         }
-      } catch {
+      } catch (e) {
+        console.warn('Failed to parse chat actions:', e)
         // Ignore parse errors for actions
       }
 
