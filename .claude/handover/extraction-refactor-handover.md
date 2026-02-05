@@ -86,3 +86,35 @@ Der Identifier `KRE` für "Bauen und Leben" war zu unspezifisch:
 1. **Identifier-Mindestlänge:** `contains`-Identifier sollten mindestens 4 Zeichen haben
 2. **Operator-Wahl:** Für Präfixe wie "KRE " besser `starts_with` statt `contains` verwenden
 3. **Code-Schutz:** Neue Validierung verhindert zukünftige ähnliche Probleme automatisch
+
+---
+
+## Bug Fix: Chat-Assistent findet keine Daten (2026-02-05)
+
+**Issue:** `issues/high-chat-keine-daten-bug-1.md`
+
+### Problem
+Chat-Assistent antwortete auf ALLE Fragen mit "Es wurden keine relevanten Daten in der Datenbank gefunden".
+
+### Root Causes
+1. **`isListAllQuery` zu restriktiv:** Erkannte nur wenige Phrasen wie "alle artikel", nicht aber "wie viele artikel", "bestand", etc.
+2. **Fehlende Embeddings:** 13 Artikel hatten keine Vector-Embeddings für die Semantic Search
+
+### Lösung
+
+| Fix | Datei | Beschreibung |
+|-----|-------|--------------|
+| Query-Erkennung | `src/app/api/chat/route.ts:246-262` | Erweiterte Patterns: `wie viele`, `wieviele`, `anzahl`, `bestand`, `im system`, `in der datenbank`, `zugriff` |
+| Embeddings Backfill | `scripts/backfill-embeddings.ts` | 13 Artikel mit Embeddings versehen |
+| Auto-Embeddings POST | `src/app/api/articles/route.ts` | Automatische Embedding-Generierung bei Artikel-Erstellung |
+| Auto-Embeddings PATCH | `src/app/api/articles/[id]/route.ts` | Embedding-Regenerierung bei Änderung von `name`, `description`, `article_number` |
+
+### Commit
+```
+0a5b934 fix: Chat-Assistent findet keine Daten - erweiterte Query-Erkennung + Auto-Embeddings
+```
+
+### Lessons Learned
+1. **Embeddings prüfen:** Bei RAG-Problemen immer zuerst prüfen ob Embeddings vorhanden sind
+2. **Fallback-Logik:** `isListAllQuery` ist wichtig für allgemeine Fragen, die Hybrid-Search nicht gut beantworten kann
+3. **Auto-Generierung:** Embeddings müssen automatisch bei Create/Update generiert werden, nicht nur via Backfill
