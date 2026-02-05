@@ -13,6 +13,7 @@ export interface TestSupplier {
 }
 
 // Minimal SupplierIdentifier type for testing
+// Note: created_at and updated_at must be required (string | null) to match SupplierIdentifier from database.types.ts
 export interface TestSupplierIdentifier {
   id: string
   supplier_id: string
@@ -22,8 +23,8 @@ export interface TestSupplierIdentifier {
   priority: 'hoch' | 'mittel' | 'niedrig'
   is_active: boolean
   supplier?: { id: string; name: string } | null
-  created_at?: string | null
-  updated_at?: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 // Blocklist entry type
@@ -119,6 +120,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'hoch',
     is_active: true,
     supplier: { id: 'sup-001', name: 'Metro Deutschland GmbH' },
+    created_at: null,
+    updated_at: null,
   },
   // High priority - invoice number prefix
   {
@@ -130,6 +133,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'hoch',
     is_active: true,
     supplier: { id: 'sup-002', name: 'EDEKA Handelsgesellschaft Südbayern mbH' },
+    created_at: null,
+    updated_at: null,
   },
   // Medium priority - phone number contains
   {
@@ -141,6 +146,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'mittel',
     is_active: true,
     supplier: { id: 'sup-003', name: 'Transgourmet Deutschland GmbH & Co. OHG' },
+    created_at: null,
+    updated_at: null,
   },
   // Low priority - website domain
   {
@@ -152,6 +159,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'niedrig',
     is_active: true,
     supplier: { id: 'sup-004', name: 'Bäckerei Müller e.K.' },
+    created_at: null,
+    updated_at: null,
   },
   // Inactive identifier (should be ignored)
   {
@@ -163,6 +172,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'hoch',
     is_active: false,
     supplier: { id: 'sup-005', name: 'Fleischerei Schmidt & Sohn' },
+    created_at: null,
+    updated_at: null,
   },
   // IBAN prefix for financial matching
   {
@@ -174,6 +185,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'hoch',
     is_active: true,
     supplier: { id: 'sup-007', name: 'Getränke Hoffmann AG' },
+    created_at: null,
+    updated_at: null,
   },
   // Short "contains" identifier - should be skipped (false positive risk)
   // Bug fix: high-lieferanten-matching-bug-2.md
@@ -186,6 +199,8 @@ export const testIdentifiers: TestSupplierIdentifier[] = [
     priority: 'hoch',
     is_active: true,
     supplier: { id: 'sup-008', name: 'Molkerei Alpenfrisch' },
+    created_at: null,
+    updated_at: null,
   },
 ]
 

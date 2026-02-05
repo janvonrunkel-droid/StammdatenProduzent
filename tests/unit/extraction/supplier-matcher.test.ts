@@ -405,6 +405,8 @@ describe('matchSupplierByIdentifiers', () => {
         priority: 'hoch' as const,
         is_active: true,
         supplier: { id: 'test-001', name: 'Test Supplier' },
+        created_at: null,
+        updated_at: null,
       },
     ]
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod/v4'
+import { z } from 'zod'
 import OpenAI from 'openai'
 import { requireAuth } from '@/lib/supabase'
 import { generateEmbedding, formatEmbeddingForPostgres } from '@/lib/embeddings/service'

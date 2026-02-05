@@ -17,6 +17,9 @@ import {
 import { testSuppliers } from '../fixtures/suppliers'
 import { testArticles } from '../fixtures/articles'
 
+// Type for test documents (matches createTestDocument return type)
+type TestDocument = ReturnType<typeof createTestDocument>
+
 describe('Supabase Mock Operations', () => {
   let supabase: MockSupabaseClient
 
@@ -38,8 +41,10 @@ describe('Supabase Mock Operations', () => {
 
         expect(error).toBeNull()
         expect(data).not.toBeNull()
-        expect(data?.original_filename).toBe('invoice.pdf')
-        expect(data?.id).toBeDefined()
+        // Cast to TestDocument to access specific properties
+        const typedData = data as TestDocument | null
+        expect(typedData?.original_filename).toBe('invoice.pdf')
+        expect(typedData?.id).toBeDefined()
       })
 
       it('should insert multiple documents', async () => {
