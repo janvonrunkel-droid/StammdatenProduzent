@@ -384,7 +384,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
       queryClient.invalidateQueries({ queryKey: ['review-queue'] })
       queryClient.invalidateQueries({ queryKey: ['extraction', extractionId] })
       toast.success(data.message || 'Daten erfolgreich übernommen')
-      router.push('/review')
+      router.push('/documents?tab=review')
     },
     onError: (error: Error) => {
       toast.error(error.message)
@@ -411,7 +411,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
       clearLocalStorageBackup()
       queryClient.invalidateQueries({ queryKey: ['review-queue'] })
       toast.success('Dokument abgelehnt')
-      router.push('/review')
+      router.push('/documents?tab=review')
     },
     onError: (error: Error) => {
       toast.error(error.message)
@@ -672,7 +672,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
           <p className="text-muted-foreground mb-4">
             Die angeforderte Extraktion existiert nicht oder Sie haben keinen Zugriff.
           </p>
-          <Button onClick={() => router.push('/review')}>
+          <Button onClick={() => router.push('/documents?tab=review')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Zurück zur Queue
           </Button>
@@ -689,7 +689,7 @@ export default function ReviewEditorPage({ params }: PageProps) {
       {/* Header */}
       <div className="px-4 py-3 border-b bg-background flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/review')}>
+          <Button variant="ghost" size="sm" onClick={() => router.push('/documents?tab=review')}>
             <ArrowLeft className="h-4 w-4 mr-1" />
             Zurück
           </Button>

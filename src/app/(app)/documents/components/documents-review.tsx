@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ClipboardCheck, ArrowUpDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -14,7 +13,6 @@ import {
 import {
   ReviewQueueTable,
   ReviewQueueFilters,
-  type ReviewQueueItem,
   type ReviewQueueResponse,
 } from '@/components/review'
 import type { Supplier } from '@/lib/database.types'
@@ -37,7 +35,7 @@ const sortLabels: Record<SortOption, string> = {
   date_desc: 'Neueste zuerst',
 }
 
-export default function ReviewPage() {
+export function DocumentsReview() {
   // Filter State
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -111,32 +109,23 @@ export default function ReviewPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="text-center text-destructive">
-          Fehler beim Laden der Review-Queue. Bitte versuchen Sie es erneut.
-        </div>
+      <div className="text-center text-destructive py-8">
+        Fehler beim Laden der Review-Queue. Bitte versuchen Sie es erneut.
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Header Info */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <ClipboardCheck className="h-8 w-8" />
-            Review-Queue
-          </h1>
-          <p className="text-muted-foreground">
-            Extrahierte Daten prüfen und in Stammdaten übernehmen.
-          </p>
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <ClipboardCheck className="h-5 w-5" />
+          <span>Extrahierte Daten prüfen und in Stammdaten übernehmen.</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {total} Dokument{total !== 1 ? 'e' : ''} zur Prüfung
-          </span>
-        </div>
+        <span className="text-sm text-muted-foreground">
+          {total} Dokument{total !== 1 ? 'e' : ''} zur Prüfung
+        </span>
       </div>
 
       {/* Filters and Sort */}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeftRight, AlertTriangle, Check, X, Loader2, RefreshCw } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -50,7 +50,7 @@ const THRESHOLD_OPTIONS = [
   { value: '0.95', label: '95%' },
 ]
 
-export default function DuplicatesPage() {
+export function DocumentsDuplicates() {
   const [duplicates, setDuplicates] = useState<DuplicatePair[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -136,46 +136,36 @@ export default function DuplicatesPage() {
   }
 
   return (
-    <div className="container py-6 space-y-6">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Header Actions */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Duplikat-Erkennung</h1>
-          <p className="text-muted-foreground">
-            Finden und bereinigen Sie potenzielle Duplikate in Ihren Daten.
-          </p>
-        </div>
+        <p className="text-muted-foreground">
+          Finden und bereinigen Sie potenzielle Duplikate in Ihren Daten.
+        </p>
         <Button variant="outline" onClick={fetchDuplicates} disabled={loading}>
           <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
           Aktualisieren
         </Button>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Filter</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Mindest-Ähnlichkeit</label>
-              <Select value={threshold} onValueChange={setThreshold}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {THRESHOLD_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Filter */}
+      <div className="flex items-center gap-4">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Mindest-Ähnlichkeit</label>
+          <Select value={threshold} onValueChange={setThreshold}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {THRESHOLD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Error */}
       {error && (
