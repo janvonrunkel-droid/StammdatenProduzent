@@ -150,11 +150,12 @@ export function useChat() {
         // Ignore parse errors for sources
       }
 
-      // Parse actions from headers
+      // Parse actions from headers (Base64-encoded to avoid emoji ByteString error)
       const actionsHeader = response.headers.get('X-Chat-Actions')
       try {
         if (actionsHeader) {
-          actions = JSON.parse(actionsHeader)
+          const decoded = atob(actionsHeader)
+          actions = JSON.parse(decoded)
         }
       } catch {
         // Ignore parse errors for actions

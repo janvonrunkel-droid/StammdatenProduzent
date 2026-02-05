@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { z } from 'zod/v4'
+import { z } from 'zod'
 import { createOpenAI } from '@ai-sdk/openai'
 import { streamText } from 'ai'
 import { requireAuth } from '@/lib/supabase'
@@ -787,7 +787,8 @@ export async function POST(request: NextRequest) {
     response.headers.set('X-Chat-Message-Id', assistantMessageId)
     response.headers.set('X-Chat-Intent', intent.type)
     response.headers.set('X-Chat-Sources', JSON.stringify(sources))
-    response.headers.set('X-Chat-Actions', JSON.stringify(actions))
+    // Base64-encode actions to avoid ByteString error from emoji icons
+    response.headers.set('X-Chat-Actions', Buffer.from(JSON.stringify(actions)).toString('base64'))
     response.headers.set('X-Chat-Articles-Found', String(retrievedData.articles.length))
     response.headers.set('X-Chat-Prices-Found', String(retrievedData.prices.length))
 
