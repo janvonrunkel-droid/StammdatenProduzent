@@ -56,3 +56,18 @@ Laut Fix-Log wurden diese Dateien geändert:
 
 ## Root Cause Analysis
 Der vorherige Fix hat vermutlich einen fehlerhaften Import eingeführt. Das `zod/v4` Subpath-Pattern war ein Migrations-Pattern für den Übergang von Zod v3 zu v4, aber da das Projekt bereits auf Zod v4.3.5 ist, sollte der Import einfach `from 'zod'` sein (wie in allen anderen Validations-Dateien im Projekt).
+
+## Weiterer Fix (2026-02-05)
+Nach dem initialen Fix trat der Fehler weiterhin auf Vercel auf. Die Ursache war ein **zweites Problem** in `/api/chat/stream/route.ts`:
+
+1. **Gleicher Zod-Import Bug** (Zeile 2): `import { z } from 'zod/v4'`
+2. **ByteString-Fehler durch Emojis in HTTP Headers**:
+   - `ChatAction.icon` enthielt Emojis wie `📊`, `📈`, `🔍`
+   - Diese wurden via `JSON.stringify(actions)` in den Header `X-Chat-Actions` geschrieben
+   - HTTP Headers erlauben nur ASCII (0-255), Emojis sind UTF-16 (z.B. 0xD83D = 55357)
+   - Error: `TypeError: Cannot convert argument to a ByteString because the character at index 44 has a value of 55357`
+
+**Lösung:**
+- Zod-Import korrigiert
+- Actions-Header wird jetzt Base64-encodiert (`Buffer.from(...).toString('base64')`)
+- Frontend decodiert mit `atob()` in `use-chat.ts`
