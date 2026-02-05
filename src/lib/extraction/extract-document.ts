@@ -38,6 +38,10 @@ import {
   type ArticleWithSupplierPrices,
   type ArticleMatchResult,
 } from './article-matcher'
+import {
+  approveExtraction,
+  type ExtractionPosition,
+} from './approve-extraction'
 import type { Json } from '@/lib/database.types'
 
 // Timeout for extraction (5 minutes)
@@ -72,6 +76,13 @@ export interface ExtractDocumentResult {
     matched: number
     suggestions: number
     unmatched: number
+  }
+  // PROJ-16 BUG-4: Debug info for auto-approve
+  autoApproveResult?: {
+    pricesCreated: number
+    articlesCreated: number
+    positionsSkipped: number
+    errors: string[]
   }
 }
 
@@ -574,6 +585,52 @@ export async function extractDocument(
       }
     }
 
+    // 8b. PROJ-16 BUG-4 Fix: If auto-approved, create prices and optionally articles
+    // This was previously missing - auto-approved documents had no prices created!
+    let autoApproveResult: Awaited<ReturnType<typeof approveExtraction>> | null = null
+
+    if (canAutoApprove && extraction?.id) {
+      console.log(`[ExtractDocument] Auto-approving extraction ${extraction.id}, creating prices...`)
+
+      // Determine price date
+      const priceDate = extractionResult.document_date_detected || new Date().toISOString().split('T')[0]
+
+      // Convert positions to ExtractionPosition format
+      // Filter out positions with missing required fields
+      const extractionPositions: ExtractionPosition[] = rawData.positions
+        .filter((p) => p.quantity !== null && p.unit !== null && p.price_per_unit !== null && p.total_price !== null)
+        .map((p) => ({
+          article_name: p.article_name,
+          article_number: p.article_number,
+          article_id: p.article_id,
+          quantity: p.quantity!,
+          unit: p.unit!,
+          price_per_unit: p.price_per_unit!,
+          total_price: p.total_price!,
+          confidence: p.confidence,
+        }))
+
+      // Call shared approval function
+      autoApproveResult = await approveExtraction({
+        extractionId: extraction.id,
+        documentId,
+        supabase,
+        positions: extractionPositions,
+        supplierId: matchedSupplierId,
+        priceDate,
+        autoCreateArticles: autoCreateArticlesOverride === true,
+        userId: 'system', // Auto-approve is done by system
+        skipExtractionStatusUpdate: true, // Status already set during upsert
+      })
+
+      console.log(`[ExtractDocument] Auto-approve result: ${autoApproveResult.pricesCreated} prices, ${autoApproveResult.articlesCreated} articles created`)
+
+      // Add any warnings from approval to extraction warnings
+      if (autoApproveResult.warnings.length > 0) {
+        extractionResult.warnings.push(...autoApproveResult.warnings)
+      }
+    }
+
     // 9. Update document status and metadata
     const documentUpdate: Record<string, unknown> = {
       status: extractionStatus === 'approved' ? 'completed' : 'reviewed',
@@ -609,6 +666,13 @@ export async function extractDocument(
         suggestions: articleMatchStats.suggestions,
         unmatched: articleMatchStats.unmatched,
       },
+      // PROJ-16 BUG-4: Include auto-approve result for debugging
+      autoApproveResult: autoApproveResult ? {
+        pricesCreated: autoApproveResult.pricesCreated,
+        articlesCreated: autoApproveResult.articlesCreated,
+        positionsSkipped: autoApproveResult.positionsSkipped,
+        errors: autoApproveResult.errors,
+      } : undefined,
     }
   } catch (error) {
     console.error(`[ExtractDocument] Extraction error for ${documentId}:`, error)

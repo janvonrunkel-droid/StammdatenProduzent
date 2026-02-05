@@ -174,27 +174,27 @@ function ConfidenceIndicator({ score }: { score: number }) {
 
   if (percentage >= 90) {
     return (
-      <div className="flex items-center gap-2">
+      <span className="inline-flex items-center gap-2">
         <CheckCircle2 className="h-5 w-5 text-green-500" />
         <span className="text-green-600 font-medium">{percentage}%</span>
-      </div>
+      </span>
     )
   }
 
   if (percentage >= 70) {
     return (
-      <div className="flex items-center gap-2">
+      <span className="inline-flex items-center gap-2">
         <AlertCircle className="h-5 w-5 text-yellow-500" />
         <span className="text-yellow-600 font-medium">{percentage}%</span>
-      </div>
+      </span>
     )
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <span className="inline-flex items-center gap-2">
       <XCircle className="h-5 w-5 text-red-500" />
       <span className="text-red-600 font-medium">{percentage}%</span>
-    </div>
+    </span>
   )
 }
 

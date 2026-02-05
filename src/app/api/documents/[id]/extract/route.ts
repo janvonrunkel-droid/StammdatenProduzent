@@ -154,6 +154,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       articles_matched: result.articleStats?.matched || 0,
       articles_suggestions: result.articleStats?.suggestions || 0,
       articles_unmatched: result.articleStats?.unmatched || 0,
+      // PROJ-16 BUG-4: Debug info
+      auto_approve_result: result.autoApproveResult,
     })
   } catch (error) {
     console.error('Extraction error:', error)
