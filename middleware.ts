@@ -80,6 +80,11 @@ function getRateLimitKey(request: NextRequest): string {
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
+  // Export API routes use their own API-Key auth — skip session handling
+  if (path.startsWith('/api/export/')) {
+    return NextResponse.next()
+  }
+
   // Rate limit extraction endpoints
   if (
     path.includes('/api/documents/') &&
